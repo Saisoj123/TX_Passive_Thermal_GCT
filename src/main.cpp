@@ -21,7 +21,7 @@ uint8_t servantAdress[][6] ={{0x24, 0x0A, 0xC4, 0x0A, 0x0B, 0x24},
 
 //MARK: USER VARIABLES
 int numSens =       9;  //number of DS18B20 sensors, connected to the oneWireBus
-int numServ =       4;  //number of servents
+int numServ =       sizeof(servantAdress) / sizeof(servantAdress[0]);  //number of servents
 int interval =  30000;  //interval between measurements in ms
 
 //MARK: PIN DEFINITIONS
@@ -67,6 +67,12 @@ void OnDataReceived(const uint8_t *mac_addr, const uint8_t *RXdata_param, int RX
     checkActionID(local_RXdata.actionID, local_RXdata.value);
 }
 
+const char* updateTimeStamp() {
+    DateTime now = rtc.now();
+    char timestamp[20];
+    sprintf(timestamp, "%04d-%02d-%02d %02d:%02d:%02d", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
+    return(timestamp);
+}
 
 void setup() { // MARK: SETUP
     Serial.begin(115200);
@@ -103,7 +109,7 @@ void setup() { // MARK: SETUP
 
     // Peer info
     esp_now_peer_info_t peerInfo;
-    memcpy(peerInfo.peer_addr, masterAdress, 6);
+    memcpy(peerInfo.peer_addr, servantAdress, 6);
     peerInfo.channel = 0;  
     peerInfo.encrypt = false;
 
