@@ -20,9 +20,9 @@ uint8_t servantAdress[][6] ={{0x24, 0x0A, 0xC4, 0x0A, 0x0B, 0x24},
                              {0x24, 0x0A, 0xC4, 0x0A, 0x0B, 0x24}}; //made up address MARK: MAC ADRESS
 
 //MARK: USER VARIABLES
-int numSens =       9;  //number of DS18B20 sensors, connected to the oneWireBus
+int numSens =        9;  //number of DS18B20 sensors, connected to the oneWireBus
 int numServ =       sizeof(servantAdress) / sizeof(servantAdress[0]);  //number of servents
-int interval =  30000;  //interval between measurements in ms
+int logFreq =      30;  //interval between measurements in seconds
 
 //MARK: PIN DEFINITIONS
 #define SD_CS       5
@@ -30,6 +30,9 @@ int interval =  30000;  //interval between measurements in ms
 //MARK: SYSTEM VARIABLES
 //Do not touch these!!!
 char filename[25] = "";
+unsigned long lastTime = 0;  // will store the last time the function was called
+unsigned long interval = interval*1000;  // interval at which to call function (milliseconds)
+
 
 RTC_DS3231 rtc; // Create a RTC object
 
@@ -74,6 +77,23 @@ const char* updateTimeStamp() {
     return(timestamp);
 }
 
+void sendAction(int actionID, float value) { //MARK: SEND ACTION ID
+    struct_message TXdata;
+    TXdata.actionID = actionID;
+    TXdata.value = value;
+
+    for (int i = 0; i < numServ; i++) {
+        esp_err_t result = esp_now_send(servantAdress[i], (uint8_t *) &TXdata, sizeof(TXdata));
+
+        if (result == ESP_OK) {
+            Serial.println("SUCCESS: Action ID: " + String(actionID) + " with value: " + String(value));
+        }
+        else {
+            Serial.println("Error sending the action");
+        }
+    }
+}
+
 void setup() { // MARK: SETUP
     Serial.begin(115200);
 
@@ -108,15 +128,17 @@ void setup() { // MARK: SETUP
     esp_now_register_recv_cb(OnDataReceived); // Register callbacks
 
     // Peer info
-    esp_now_peer_info_t peerInfo;
-    memcpy(peerInfo.peer_addr, servantAdress, 6);
-    peerInfo.channel = 0;  
-    peerInfo.encrypt = false;
+    esp_now_peer_info_t peerInfo[numServ]; // Adjust the size of the array based on the number of receivers
+    for (int i = 0; i < numServ; i++) {    // Initialize each object in the peerInfo array
+        memcpy(peerInfo[i].peer_addr, servantAdress[i], 6);
+        peerInfo[i].channel = 0;
+        peerInfo[i].encrypt = false;
 
-    // Add peer        
-    if (esp_now_add_peer(&peerInfo) != ESP_OK){
-        Serial.println("Failed to add peer");
-        return;
+        // Add each peer individually
+        if (esp_now_add_peer(&peerInfo[i]) != ESP_OK){
+            Serial.println("Failed to add peer");
+            return;
+        }
     }
     // End Init ESP-NOW -----------------------
 
@@ -126,5 +148,10 @@ void setup() { // MARK: SETUP
 
 
 void loop() { // MARK: LOOP
-
+    unsigned long currentTime = millis();
+    if(currentTime - lastTime > interval) {
+        lastTime = currentTime;   
+        // put reoccuring code here
+        sendAction(3001,1);
+    }
 }
