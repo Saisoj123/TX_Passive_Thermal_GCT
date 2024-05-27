@@ -1,6 +1,9 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <RTClib.h>
+#include "FS.h"
+#include "SD.h"
+#include "SPI.h"
 
 // structure to send data
 typedef struct struct_message {
@@ -28,7 +31,10 @@ temp tempData;
 volatile bool messageReceived = false;
 volatile int receivedActionID = 0;
 temp receivedData;
-char timestamp[20];
+char timestamp[19];
+#define CS_PIN 5
+File file;
+char fileName[24];
 
 
 uint8_t broadcastAddresses[][6] = {
@@ -98,7 +104,10 @@ String tempToString(temp t, String timestamp, int serventID) {//MARK: To String
 }
 
 void writeToSD(String dataString) {
-    Serial.print (dataString);
+    //Serial.print (dataString);
+    file = SD.open(fileName, FILE_WRITE);
+    file.print(dataString);
+    file.close();
 }
 
 
@@ -146,11 +155,34 @@ void setup() {
     }
     //------------------ ESP-NNOW -INIT - END ------------------
 
+    //------------------ SD CARD - INIT - BEGIN ------------------
+    if(!SD.begin(CS_PIN)){
+        Serial.println("Card Mount Failed");
+        return;
+    }
+    uint8_t cardType = SD.cardType();
+    if(cardType == CARD_NONE){
+        Serial.println("No SD card attached");
+        return;
+    }
+
+    strncpy(fileName, "/test123.txt", sizeof(fileName));
+    File file = SD.open(fileName, FILE_WRITE);
+    
+    if(!file){
+        Serial.println("Failed to open file for writing");
+        return;
+    }
+
+    //------------------ SD CARD - INIT - END ------------------
+
+    //------------------ RTC - INIT - BEGIN ------------------
     if (! rtc.begin()) {
         Serial.println("Could not find RTC!");
         while (1);
     }
     //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //uncomment to set the RTC to the compile time
+    //------------------ RTC - INIT - END ------------------
 }
 
 
