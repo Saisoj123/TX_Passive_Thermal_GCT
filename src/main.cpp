@@ -1,157 +1,161 @@
-#include <Arduino.h>
 #include <esp_now.h>
 #include <WiFi.h>
 #include <RTClib.h>
-#include <SD.h>
 
-
-// Structure to send data
-// Must match the receiver structure
+// structure to send data
 typedef struct struct_message {
     int actionID;
     float value;
 } struct_message;
-
-struct_message TXdata; // Create a struct_message called data
-
-uint8_t servantAdress[][6] ={{0x24, 0x0A, 0xC4, 0x0A, 0x0B, 0x24},
-                             {0x24, 0x0A, 0xC4, 0x0A, 0x0B, 0x24},
-                             {0x24, 0x0A, 0xC4, 0x0A, 0x0B, 0x24},
-                             {0x24, 0x0A, 0xC4, 0x0A, 0x0B, 0x24}}; //made up address MARK: MAC ADRESS
-
-//MARK: USER VARIABLES
-int numSens =        9;  //number of DS18B20 sensors, connected to the oneWireBus
-int numServ =       sizeof(servantAdress) / sizeof(servantAdress[0]);  //number of servents
-int logFreq =      30;  //interval between measurements in seconds
-
-//MARK: PIN DEFINITIONS
-#define SD_CS       5
-
-//MARK: SYSTEM VARIABLES
-//Do not touch these!!!
-char filename[25] = "";
-unsigned long lastTime = 0;  // will store the last time the function was called
-unsigned long interval = interval*1000;  // interval at which to call function (milliseconds)
+struct_message TXdata;
 
 
-RTC_DS3231 rtc; // Create a RTC object
+typedef struct temp {
+    int actionID;
+    float sens1;
+    float sens2;
+    float sens3;
+    float sens4;
+    float sens5;
+    float sens6;
+    float sens7;
+    float sens8;
+    float sens9;
+} temp;
+temp tempData;
 
-void checkActionID(int actionID, float value) { //MARK: CHECK ACTION IDs
-    switch (actionID) {
-       
-        case 1234:
-            Serial.println("ActionID: 1234"); //later replace with actual action
-            break;
-        
-        default:
-            Serial.print("ERROR: Invalid actionID: ");
-            Serial.println(actionID);
-            break;
-    }
-}
+// system variables
+volatile bool messageReceived = false;
+volatile int receivedActionID = 0;
+temp receivedData;
+char timestamp[20];
 
-// Callback when data is sent MARK:CALLBACKS
+
+uint8_t broadcastAddresses[][6] = {
+    {0x48, 0xE7, 0x29, 0x8C, 0x78, 0x30},
+    {0x48, 0xE7, 0x29, 0x8C, 0x6B, 0x5C},
+    {0x48, 0xE7, 0x29, 0x8C, 0x72, 0x50},
+    {0x48, 0xE7, 0x29, 0x29, 0x79, 0x68}
+};
+esp_now_peer_info_t peerInfo[4];
+
+RTC_DS3231 rtc;
+
+
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     Serial.print("\r\nLast Packet Send Status:\t");
     Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
-// Callback when data is received
-void OnDataReceived(const uint8_t *mac_addr, const uint8_t *RXdata_param, int RXdata_len) {
-    struct_message local_RXdata;
-    memcpy(&local_RXdata, RXdata_param, RXdata_len);
-
-    // Process the received data
-    Serial.print("Received actionID: ");
-    Serial.println(local_RXdata.actionID);
-    Serial.print("Received value: ");
-    Serial.println(local_RXdata.value);
-
-    checkActionID(local_RXdata.actionID, local_RXdata.value);
+void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
+    memcpy(&receivedData, incomingData, sizeof(receivedData));
+    receivedActionID = receivedData.actionID;
+    messageReceived = true;
 }
 
-const char* updateTimeStamp() {
-    DateTime now = rtc.now();
-    char timestamp[20];
-    sprintf(timestamp, "%04d-%02d-%02d %02d:%02d:%02d", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
-    return(timestamp);
-}
+void SerialUserInput() {
+    while (!Serial.available()) {
+        // Wait for user input
+    }
+    int userActionID = Serial.parseInt();
+    TXdata.actionID = userActionID != 0 ? userActionID : 1; // Use user input if available, otherwise use default value
 
-void sendAction(int actionID, float value) { //MARK: SEND ACTION ID
-    struct_message TXdata;
-    TXdata.actionID = actionID;
-    TXdata.value = value;
+    TXdata.value = 2.0; // Replace with your actual default value
 
-    for (int i = 0; i < numServ; i++) {
-        esp_err_t result = esp_now_send(servantAdress[i], (uint8_t *) &TXdata, sizeof(TXdata));
-
+    for (int i = 0; i < 4; i++) {
+        esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
+         
         if (result == ESP_OK) {
-            Serial.println("SUCCESS: Action ID: " + String(actionID) + " with value: " + String(value));
+            Serial.println("Sending confirmed");
         }
         else {
-            Serial.println("Error sending the action");
+            Serial.println("Sending error");
         }
+    }
+
+    //delay(2000); // Add a delay to prevent flooding the network
+}
+
+void waitForActionID(int actionID) {
+    while (!messageReceived || receivedActionID != actionID) {
+        // Wait for message with correct actionID
+    }
+    messageReceived = false; // Reset for next message
+}
+
+String tempToString(temp t, String timestamp, int serventID) {//MARK: To String
+    String data = "";
+    data += timestamp + "," + String(serventID) + ",1," + String(t.sens1) + "\n";
+    data += timestamp + "," + String(serventID) + ",2," + String(t.sens2) + "\n";
+    data += timestamp + "," + String(serventID) + ",3," + String(t.sens3) + "\n";
+    data += timestamp + "," + String(serventID) + ",4," + String(t.sens4) + "\n";
+    data += timestamp + "," + String(serventID) + ",5," + String(t.sens5) + "\n";
+    data += timestamp + "," + String(serventID) + ",6," + String(t.sens6) + "\n";
+    data += timestamp + "," + String(serventID) + ",7," + String(t.sens7) + "\n";
+    data += timestamp + "," + String(serventID) + ",8," + String(t.sens8) + "\n";
+    data += timestamp + "," + String(serventID) + ",9," + String(t.sens9) + "\n";
+    return data;
+}
+
+void writeToSD(String dataString) {
+    Serial.print (dataString);
+}
+
+
+const char* get_timestamp() {
+    DateTime now = rtc.now();
+    sprintf(timestamp, "%04d-%02d-%02d %02d:%02d:%02d", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
+    return timestamp;
+}
+
+
+void getAllTemps() {//MARK: Get temperatures
+    TXdata.actionID = 3001; //Action ID for getting all temperatures from a servent
+
+    for (int i = 0; i < 4; i++) {
+        esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
+        waitForActionID(2001);
+        writeToSD(tempToString(receivedData,get_timestamp(), i+1));
     }
 }
 
-void setup() { // MARK: SETUP
+
+void setup() {
     Serial.begin(115200);
 
-    WiFi.mode(WIFI_STA);  // Set device as a Wi-Fi Station
+    //------------------ ESP-NNOW -INIT - BEGIN ------------------
+    WiFi.mode(WIFI_STA);
 
-    // Begin RTC Init -----------------------
-    Wire.begin();
-    if (! rtc.begin()) {
-        Serial.println("Couldn't find RTC");
-        while (1);
-    }
-    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //uncomment to set the RTC to the compile time
-    // End RTC Init -----------------------
-
-
-    // Begin SD Card Init -----------------------
-    if (!SD.begin(SD_CS)) {  // Change this to the correct CS pin!
-        Serial.println("SD-Card Initialization failed!");
-        return;
-    }
-    Serial.println("SD-Card Initialization done.");
-    // End SD Card Init -----------------------
-
-
-    // Begin Init ESP-NOW -----------------------
     if (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW");
         return;
     }
 
     esp_now_register_send_cb(OnDataSent);
-    esp_now_register_recv_cb(OnDataReceived); // Register callbacks
+    esp_now_register_recv_cb(OnDataRecv);
 
-    // Peer info
-    esp_now_peer_info_t peerInfo[numServ]; // Adjust the size of the array based on the number of receivers
-    for (int i = 0; i < numServ; i++) {    // Initialize each object in the peerInfo array
-        memcpy(peerInfo[i].peer_addr, servantAdress[i], 6);
-        peerInfo[i].channel = 0;
+    for (int i = 0; i < 4; i++) {
+        memcpy(peerInfo[i].peer_addr, broadcastAddresses[i], 6);
+        peerInfo[i].channel = 0;  
         peerInfo[i].encrypt = false;
-
-        // Add each peer individually
+        
         if (esp_now_add_peer(&peerInfo[i]) != ESP_OK){
             Serial.println("Failed to add peer");
             return;
         }
     }
-    // End Init ESP-NOW -----------------------
+    //------------------ ESP-NNOW -INIT - END ------------------
 
-    sprintf(filename, "%s.txt", updateTimeStamp()); //create filename with timestamp of boot
-    Serial.print("Filename: "); Serial.println(filename);
+    if (! rtc.begin()) {
+        Serial.println("Could not find RTC!");
+        while (1);
+    }
+    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //uncomment to set the RTC to the compile time
 }
 
 
-void loop() { // MARK: LOOP
-    unsigned long currentTime = millis();
-    if(currentTime - lastTime > interval) {
-        lastTime = currentTime;   
-        // put reoccuring code here
-        sendAction(3001,1);
-    }
+void loop() {
+    //SerialUserInput();
+    getAllTemps();
+    delay(10000);
 }
