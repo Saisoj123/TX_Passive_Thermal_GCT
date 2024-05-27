@@ -5,6 +5,9 @@
 #include "SD.h"
 #include "SPI.h"
 
+//User variables
+int sendTimeout = 1000; //Timeout for waiting for a servent response data in ms
+
 // structure to send data
 typedef struct struct_message {
     int actionID;
@@ -83,7 +86,12 @@ void SerialUserInput() {
 }
 
 void waitForActionID(int actionID) {
+    unsigned long startTime = millis();
     while (!messageReceived || receivedActionID != actionID) {
+        if (millis() - startTime > sendTimeout) {
+            Serial.println("Timeout waiting for action ID");
+            break;
+        }
         // Wait for message with correct actionID
     }
     messageReceived = false; // Reset for next message
@@ -105,7 +113,7 @@ String tempToString(temp t, String timestamp, int serventID) {//MARK: To String
 
 void writeToSD(String dataString) {
     //Serial.print (dataString);
-    file = SD.open(fileName, FILE_WRITE);
+    file = SD.open(fileName, FILE_APPEND); // Open the file in append mode
     file.print(dataString);
     file.close();
 }
@@ -125,6 +133,7 @@ void getAllTemps() {//MARK: Get temperatures
         esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
         waitForActionID(2001);
         writeToSD(tempToString(receivedData,get_timestamp(), i+1));
+
     }
 }
 
