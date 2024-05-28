@@ -65,7 +65,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
         Serial.println("Delivery Fail");
         conectionStatus = false;
     }
-    Serial.print(conectionStatus);
+    //Serial.print(conectionStatus);
 }
 
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
@@ -199,7 +199,7 @@ void displayTemp(int targetID, temp t) { //MARK: Display temperature
     }
     
     float avgTemp = (t.sens1 + t.sens2 + t.sens3 + t.sens4 + t.sens5 + t.sens6 + t.sens7 + t.sens8 + t.sens9) / 9;
-    Serial.println("Taget ID: " + String(targetID) + "\tAvg Temp: " + String(avgTemp) + "°C");
+    //Serial.println("Taget ID: " + String(targetID) + "\tAvg Temp: " + String(avgTemp) + "°C");
     lcd.printf("%.1f", avgTemp);
 }
     
@@ -292,7 +292,7 @@ void setup() {  //MARK: Setup
         return;
     }
 
-    strncpy(fileName, "/test123.txt", sizeof(fileName));
+    strncpy(fileName, "/data_master.csv", sizeof(fileName));
     File file = SD.open(fileName, FILE_WRITE);
     
     if(!file){
