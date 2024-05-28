@@ -1,12 +1,13 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <RTClib.h>
-#include "FS.h"
-#include "SD.h"
-#include "SPI.h"
+#include <FS.h>
+#include <SD.h>
+#include <SPI.h>
 
 //User variables
-int sendTimeout = 1000; //Timeout for waiting for a servent response data in ms
+int sendTimeout     = 1000;     //Timeout for waiting for a servent response data in ms
+int logIntervall    = 10000;   //Log intervall in ms
 
 // structure to send data
 typedef struct struct_message {
@@ -137,6 +138,22 @@ void getAllTemps() {//MARK: Get temperatures
     }
 }
 
+void logLoop() {
+    unsigned long previousMillis = 0;
+    unsigned long interval = logIntervall;
+
+    while (true) {
+        unsigned long currentMillis = millis();
+
+        if (currentMillis - previousMillis >= interval) {
+            // Code to run every 10 seconds
+            getAllTemps();
+
+            previousMillis = currentMillis;
+        }
+    }
+}
+
 
 void setup() {
     Serial.begin(115200);
@@ -196,7 +213,5 @@ void setup() {
 
 
 void loop() {
-    //SerialUserInput();
-    getAllTemps();
-    delay(10000);
+    logLoop();
 }
