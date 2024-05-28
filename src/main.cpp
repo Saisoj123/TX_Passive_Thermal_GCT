@@ -8,7 +8,7 @@
 
 //User variables
 int sendTimeout     = 1000;     //Timeout for waiting for a servent response data in ms
-int logIntervall    = 10000;   //Log intervall in ms
+int logIntervall    = 10000;    //Log intervall in ms
 
 // structure to send data
 typedef struct struct_message {
@@ -127,19 +127,26 @@ void updateConnectionStatus(bool status, int targetID) { //MARK: Update connecti
     }
 }
 
-void waitForActionID(int actionID, int targetID) { //MARK: Wait for action ID
+bool waitForActionID(int actionID, int targetID) { //MARK: Wait for action ID
     unsigned long startTime = millis();
+    bool conectionStatus = false;
+
     while (!messageReceived || receivedActionID != actionID) {
         if (millis() - startTime > sendTimeout) {
             Serial.println("Timeout waiting for action ID");
-            updateConnectionStatus(false, targetID);
+            conectionStatus = false;
             break;
         }else{
-            updateConnectionStatus(true, targetID);
+            conectionStatus = true;
         }
     }
     messageReceived = false; // Reset for next message
+
+    updateConnectionStatus(conectionStatus, targetID);
+    return (conectionStatus);
+
 }
+
 
 String tempToString(temp t, String timestamp, int serventID) {//MARK: To String
     String data = "";
@@ -155,7 +162,7 @@ String tempToString(temp t, String timestamp, int serventID) {//MARK: To String
     return data;
 }
 
-void writeToSD(String dataString) {
+void writeToSD(String dataString) { //MARK: Write to SD
     //Serial.print (dataString);
     file = SD.open(fileName, FILE_APPEND); // Open the file in append mode
     file.print(dataString);
@@ -170,18 +177,49 @@ const char* get_timestamp() {
 }
 
 
+void displayTemp(int targetID, temp t) { //MARK: Display temperature
+    
+    switch (targetID)
+    {
+        case 1:
+            lcd.setCursor( 0, 2);
+            break;
+
+        case 2:
+            lcd.setCursor( 5, 2);
+            break;
+
+        case 3:
+            lcd.setCursor(10, 2);
+            break;
+
+        case 4:
+            lcd.setCursor(15, 2);
+            break;
+    }
+    
+    float avgTemp = (t.sens1 + t.sens2 + t.sens3 + t.sens4 + t.sens5 + t.sens6 + t.sens7 + t.sens8 + t.sens9) / 9;
+    Serial.println("Taget ID: " + String(targetID) + "\tAvg Temp: " + String(avgTemp) + "°C");
+    lcd.printf("%.1f", avgTemp);
+}
+    
+
 void getAllTemps() {//MARK: Get temperatures
     TXdata.actionID = 3001; //Action ID for getting all temperatures from a servent
 
     for (int i = 0; i < 4; i++) {
         esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
-        waitForActionID(2001,i+1/*Target ID*/);
-        writeToSD(tempToString(receivedData,get_timestamp(), i+1));
+        
+        if (waitForActionID(2001,i+1/*Target ID*/) == true){
+            writeToSD(tempToString(receivedData,get_timestamp(), i+1));
+            displayTemp(i+1, receivedData);
+        }
     }
 }
 
+
 void logLoop() {
-    static unsigned long lastExecutionTime = 0;
+    static unsigned long lastExecutionTime = logIntervall;
     unsigned long currentTime = millis();
     
     if (currentTime - lastExecutionTime >= logIntervall) {
@@ -195,7 +233,7 @@ void displayTimeStamp() {
     lcd.setCursor(0, 0);
     lcd.print(get_timestamp());
 }
-    
+
 
 void setup() {  //MARK: Setup
     Serial.begin(115200);
@@ -277,7 +315,6 @@ void setup() {  //MARK: Setup
 
 
 void loop() {
-    logLoop();
     displayTimeStamp();
-    //displayConectionStatus();
+    logLoop();
 }
