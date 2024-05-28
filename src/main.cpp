@@ -4,6 +4,7 @@
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
+#include <LiquidCrystal_I2C.h>
 
 //User variables
 int sendTimeout     = 1000;     //Timeout for waiting for a servent response data in ms
@@ -51,6 +52,7 @@ esp_now_peer_info_t peerInfo[4];
 
 RTC_DS3231 rtc;
 
+LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 20 chars and 4 line display  
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     Serial.print("\r\nLast Packet Send Status:\t");
@@ -82,8 +84,6 @@ void SerialUserInput() {
             Serial.println("Sending error");
         }
     }
-
-    //delay(2000); // Add a delay to prevent flooding the network
 }
 
 void waitForActionID(int actionID) {
@@ -93,7 +93,6 @@ void waitForActionID(int actionID) {
             Serial.println("Timeout waiting for action ID");
             break;
         }
-        // Wait for message with correct actionID
     }
     messageReceived = false; // Reset for next message
 }
@@ -139,24 +138,27 @@ void getAllTemps() {//MARK: Get temperatures
 }
 
 void logLoop() {
-    unsigned long previousMillis = 0;
-    unsigned long interval = logIntervall;
 
-    while (true) {
-        unsigned long currentMillis = millis();
-
-        if (currentMillis - previousMillis >= interval) {
-            // Code to run every 10 seconds
-            getAllTemps();
-
-            previousMillis = currentMillis;
-        }
+    static unsigned long lastExecutionTime = 0;
+    unsigned long currentTime = millis();
+    
+    if (currentTime - lastExecutionTime >= logIntervall) {
+        lastExecutionTime = currentTime;
+        getAllTemps();
     }
 }
 
 
-void setup() {
+void setup() {  //MARK: Setup
     Serial.begin(115200);
+
+    //------------------ LCD - INIT - BEGIN ------------------
+    lcd.init();                      // initialize the lcd
+    lcd.backlight();                 // Turn on the backlight
+
+    lcd.setCursor(5, 1);            // set cursor to first column, first row
+    lcd.print("Booting...");    // print message
+    //------------------ LCD - INIT - END ------------------
 
     //------------------ ESP-NNOW -INIT - BEGIN ------------------
     WiFi.mode(WIFI_STA);
@@ -209,6 +211,8 @@ void setup() {
     }
     //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //uncomment to set the RTC to the compile time
     //------------------ RTC - INIT - END ------------------
+    
+    lcd.clear();
 }
 
 
