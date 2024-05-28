@@ -226,6 +226,19 @@ void logLoop() {
         lastExecutionTime = currentTime;
         getAllTemps();
     }
+
+    lcd.setCursor(0, 3);
+    lcd.print("Logging:");
+
+    lcd.setCursor(8, 3);
+    int timeLeft = ((logIntervall)-(currentTime - lastExecutionTime))/1000;
+    lcd.printf(" %.d s        ",timeLeft);
+    
+
+    if (timeLeft  < 1){
+        lcd.setCursor(0, 3);
+        lcd.print("Retrieving Data...");
+    }
 }
 
 
