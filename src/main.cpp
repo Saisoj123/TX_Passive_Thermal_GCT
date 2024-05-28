@@ -40,23 +40,32 @@ char timestamp[19];
 #define CS_PIN 5
 File file;
 char fileName[24];
+bool conectionStatus = false;
+
 
 
 uint8_t broadcastAddresses[][6] = {
     {0x48, 0xE7, 0x29, 0x8C, 0x78, 0x30},
+    {0x48, 0xE7, 0x29, 0x29, 0x79, 0x68},
     {0x48, 0xE7, 0x29, 0x8C, 0x6B, 0x5C},
-    {0x48, 0xE7, 0x29, 0x8C, 0x72, 0x50},
-    {0x48, 0xE7, 0x29, 0x29, 0x79, 0x68}
+    {0x48, 0xE7, 0x29, 0x8C, 0x72, 0x50}
 };
 esp_now_peer_info_t peerInfo[4];
 
 RTC_DS3231 rtc;
 
-LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 20 chars and 4 line display  
+LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 20 chars and 4 line display
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     Serial.print("\r\nLast Packet Send Status:\t");
-    Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+    if (status == ESP_NOW_SEND_SUCCESS) {
+        Serial.println("Delivery Success");
+        conectionStatus = true;
+    } else {
+        Serial.println("Delivery Fail");
+        conectionStatus = false;
+    }
+    Serial.print(conectionStatus);
 }
 
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
@@ -77,21 +86,56 @@ void SerialUserInput() {
     for (int i = 0; i < 4; i++) {
         esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
          
-        if (result == ESP_OK) {
-            Serial.println("Sending confirmed");
-        }
-        else {
-            Serial.println("Sending error");
-        }
+        
     }
 }
 
-void waitForActionID(int actionID) {
+void updateConnectionStatus(bool status, int targetID) { //MARK: Update connection status
+    lcd.setCursor(0, 1);
+    lcd.print("S1:");
+    lcd.setCursor(5, 1);
+    lcd.print("S2:");
+    lcd.setCursor(10, 1);
+    lcd.print("S3:");
+    lcd.setCursor(15, 1);
+    lcd.print("S4:");
+
+    
+    switch (targetID)
+    {
+        case 1:
+            lcd.setCursor(3, 1);
+            break;
+
+        case 2:
+            lcd.setCursor(8, 1);
+            break;
+
+        case 3:
+            lcd.setCursor(13, 1);
+            break;
+
+        case 4:
+            lcd.setCursor(18, 1);
+            break;
+    }
+
+    if (status) {
+        lcd.write(byte(0)); // Tick mark
+    } else {
+        lcd.print("x");
+    }
+}
+
+void waitForActionID(int actionID, int targetID) { //MARK: Wait for action ID
     unsigned long startTime = millis();
     while (!messageReceived || receivedActionID != actionID) {
         if (millis() - startTime > sendTimeout) {
             Serial.println("Timeout waiting for action ID");
+            updateConnectionStatus(false, targetID);
             break;
+        }else{
+            updateConnectionStatus(true, targetID);
         }
     }
     messageReceived = false; // Reset for next message
@@ -131,14 +175,12 @@ void getAllTemps() {//MARK: Get temperatures
 
     for (int i = 0; i < 4; i++) {
         esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
-        waitForActionID(2001);
+        waitForActionID(2001,i+1/*Target ID*/);
         writeToSD(tempToString(receivedData,get_timestamp(), i+1));
-
     }
 }
 
 void logLoop() {
-
     static unsigned long lastExecutionTime = 0;
     unsigned long currentTime = millis();
     
@@ -149,15 +191,33 @@ void logLoop() {
 }
 
 
+void displayTimeStamp() {
+    lcd.setCursor(0, 0);
+    lcd.print(get_timestamp());
+}
+    
+
 void setup() {  //MARK: Setup
     Serial.begin(115200);
 
     //------------------ LCD - INIT - BEGIN ------------------
-    lcd.init();                      // initialize the lcd
-    lcd.backlight();                 // Turn on the backlight
+    lcd.init();                     // initialize the lcd
+    lcd.backlight();                // Turn on the backlight
+
+    byte tickMark[8] = {            // Custom character for tick mark
+        B00000,
+        B00000,
+        B00001,
+        B00011,
+        B10110,
+        B11100,
+        B01000,
+        B00000
+        };
+    lcd.createChar(0, tickMark);    // Create a new custom character
 
     lcd.setCursor(5, 1);            // set cursor to first column, first row
-    lcd.print("Booting...");    // print message
+    lcd.print("Booting...");        // print message
     //------------------ LCD - INIT - END ------------------
 
     //------------------ ESP-NNOW -INIT - BEGIN ------------------
@@ -218,4 +278,6 @@ void setup() {  //MARK: Setup
 
 void loop() {
     logLoop();
+    displayTimeStamp();
+    //displayConectionStatus();
 }
