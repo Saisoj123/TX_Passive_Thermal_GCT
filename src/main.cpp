@@ -280,7 +280,11 @@ void updateStatusLED(int status){ //MARK: Update status LED
         break;
 
     case 5:
-        blinkLED(255, 100, 0); // Blink the LED in red
+        blinkLED(255, 0, 0); // Blink the LED in red
+        break;
+
+    case 6:
+        blinkLED(255, 100, 0); // Blink the LED in yellow
         break;
     
     default:
@@ -291,25 +295,22 @@ void updateStatusLED(int status){ //MARK: Update status LED
 }
 
 
-void logLoop() {
-    static unsigned long lastExecutionTime = logIntervall;
+void logLoop() {    //MARK: Log loop
+    static unsigned long previousExecution = 10000;
     unsigned long currentTime = millis();
-    
-    if (currentTime - lastExecutionTime >= logIntervall) {
-        lastExecutionTime = currentTime;
-        getAllTemps();
-    }
+    int timeLeft = ((logIntervall)-(currentTime - previousExecution))/1000;
 
-    int timeLeft = ((logIntervall)-(currentTime - lastExecutionTime))/1000;
-
-    if (timeLeft  <= 0){
+    if (currentTime - previousExecution >= logIntervall) {   // Update the connection status only every second, to avoid callback issues
+        previousExecution = currentTime;
+        Serial.println("Logging...");
         lcd.setCursor(0, 3);
-        lcd.print("Retrieving Data...");
+        lcd.print("Retrieving Data...  ");
+        getAllTemps();
     }else{
         lcd.setCursor(0, 3);
         lcd.print("Logging:");
         lcd.setCursor(8, 3);
-        lcd.printf(" %.d s        ",timeLeft);
+        lcd.printf(" %.d s        ",timeLeft+1);
     }
 }
 
@@ -515,32 +516,33 @@ void loop() {
         displayConectionStatus();
     }
 
-        while(numConnections == 0){
+    while(numConnections == 0){
         lcd.setCursor(0, 3);
         lcd.print("ERROR: No connection");
         displayConectionStatus();
         updateStatusLED(5);
+        displayTimeStamp();
+        logState = false;
     }
 
     if(buttonState()){
-        logLoop();
-
         if (numConnections == 4){
             updateStatusLED(3);
+
         }else{
             updateStatusLED(1);
+            logLoop();
         }
 
     }else{
         if (numConnections == 4){
             updateStatusLED(2);
         }else{
-            updateStatusLED(5);
+            updateStatusLED(6);
         }
 
         lcd.setCursor(0, 3);
         lcd.print("Idle (ready to log) ");
     }
-
-    Serial.println(numConnections);
+    Serial.println("!!! Main loop running !!!");
 }
