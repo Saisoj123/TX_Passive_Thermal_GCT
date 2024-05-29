@@ -45,6 +45,8 @@ char fileName[24];
 bool conectionStatus = false;
 #define BUTTON_PIN 0
 bool logState = false;
+esp_err_t lastSendStatus = ESP_FAIL;
+int numConnections = 0;
 
 Adafruit_NeoPixel strip(1, LED_PIN, NEO_GRB + NEO_KHZ800);  // Create an instance of the Adafruit_NeoPixel class
 
@@ -79,6 +81,8 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
         Serial.println("Delivery Fail");
         conectionStatus = false;
     }
+    lastSendStatus = status == ESP_NOW_SEND_SUCCESS ? ESP_OK : ESP_FAIL;
+
     //Serial.print(conectionStatus);
 }
 
@@ -156,7 +160,7 @@ bool waitForActionID(int actionID, int targetID) { //MARK: Wait for action ID
     }
     messageReceived = false; // Reset for next message
 
-    updateConnectionStatus(conectionStatus, targetID);
+    //updateConnectionStatus(conectionStatus, targetID);
     return (conectionStatus);
 
 }
@@ -273,6 +277,11 @@ void updateStatusLED(int status){ //MARK: Update status LED
 
     case 4:
         strip.setPixelColor(0, strip.Color(255, 0, 0)); // Set the LED to red
+        break;
+
+    case 5:
+        blinkLED(255, 100, 0); // Blink the LED in red
+        break;
     
     default:
         break;
@@ -286,24 +295,21 @@ void logLoop() {
     static unsigned long lastExecutionTime = logIntervall;
     unsigned long currentTime = millis();
     
-    updateStatusLED(3);
-
     if (currentTime - lastExecutionTime >= logIntervall) {
         lastExecutionTime = currentTime;
         getAllTemps();
     }
 
-    lcd.setCursor(0, 3);
-    lcd.print("Logging:");
-
-    lcd.setCursor(8, 3);
     int timeLeft = ((logIntervall)-(currentTime - lastExecutionTime))/1000;
-    lcd.printf(" %.d s        ",timeLeft);
-    
 
-    if (timeLeft  < 1){
+    if (timeLeft  <= 0){
         lcd.setCursor(0, 3);
         lcd.print("Retrieving Data...");
+    }else{
+        lcd.setCursor(0, 3);
+        lcd.print("Logging:");
+        lcd.setCursor(8, 3);
+        lcd.printf(" %.d s        ",timeLeft);
     }
 }
 
@@ -328,6 +334,71 @@ void displayError(String errorMessage = "", int errorNr = 0){ //MARK: Display er
         lcd.print(errorMessage);
     }else{
         lcd.print("FATAL ERROR (undef.)");
+    }
+}
+
+
+bool checkConnection(int locTargetID) { //MARK: Check connection
+    esp_err_t result;
+    uint8_t testData[1] = {0}; // Test data to send
+
+    esp_now_register_send_cb(OnDataSent);    // Register send callback
+    result = esp_now_send(broadcastAddresses[locTargetID-1], testData, sizeof(testData));
+
+    if (result == ESP_OK) {     // Check if the message was queued for sending successfully
+        delay(40);              // NEEDED: Delay to allow the send callback to be called
+        if (lastSendStatus == ESP_OK) {        // Check the send status
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
+}
+
+void displayConectionStatus() { //MARK: Display connection status
+    numConnections = 0;
+
+    lcd.setCursor(0, 1);
+    lcd.print("S1:");
+    lcd.setCursor(5, 1);
+    lcd.print("S2:");
+    lcd.setCursor(10, 1);
+    lcd.print("S3:");
+    lcd.setCursor(15, 1);
+    lcd.print("S4:");
+    
+    lcd.setCursor(3, 1);
+    if (checkConnection(1)) {
+        lcd.write(byte(0)); // Tick mark
+        numConnections++;
+    } else {
+        lcd.print("x");
+    }
+
+    lcd.setCursor(8, 1);
+    if (checkConnection(2)) {
+        lcd.write(byte(0)); // Tick mark
+        numConnections++;
+    } else {
+        lcd.print("x");
+    }
+
+    lcd.setCursor(13, 1);
+    if (checkConnection(3)) {
+        lcd.write(byte(0)); // Tick mark
+        numConnections++;
+    } else {
+        lcd.print("x");
+    }
+
+    lcd.setCursor(18, 1);
+    if (checkConnection(4)) {
+        lcd.write(byte(0)); // Tick mark
+        numConnections++;
+    } else {
+        lcd.print("x");
     }
 }
 
@@ -436,12 +507,40 @@ void setup() {  //MARK: Setup
 
 void loop() {
     displayTimeStamp();
-    
+
+    static unsigned long previousMillis = 0;
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= 1000) {   // Update the connection status only every second, to avoid callback issues
+        previousMillis = currentMillis;
+        displayConectionStatus();
+    }
+
+        while(numConnections == 0){
+        lcd.setCursor(0, 3);
+        lcd.print("ERROR: No connection");
+        displayConectionStatus();
+        updateStatusLED(5);
+    }
+
     if(buttonState()){
         logLoop();
+
+        if (numConnections == 4){
+            updateStatusLED(3);
+        }else{
+            updateStatusLED(1);
+        }
+
     }else{
-        updateStatusLED(2);
+        if (numConnections == 4){
+            updateStatusLED(2);
+        }else{
+            updateStatusLED(5);
+        }
+
+        lcd.setCursor(0, 3);
+        lcd.print("Idle (ready to log) ");
     }
-    Serial.print("Button State: ");
-    Serial.println(buttonState());
+
+    Serial.println(numConnections);
 }
