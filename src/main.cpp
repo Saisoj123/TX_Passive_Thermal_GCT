@@ -31,22 +31,25 @@ typedef struct temp {
     float sens8;
     float sens9;
 } temp;
-temp tempData;
+temp RXData;
 
 // system variables
-volatile bool messageReceived = false;
-volatile int receivedActionID = 0;
-temp receivedData;
+volatile bool messageReceived   = false;
+volatile int receivedActionID   = 0;
+int numConnections              = 0;
 char timestamp[19];
+char fileName[24];
+bool conectionStatus            = false;
+bool logState                   = false;
+esp_err_t lastSendStatus        = ESP_FAIL;
+temp receivedData;
+File file;
+
+// Pin definitions
 #define CS_PIN 5
 #define LED_PIN 2
-File file;
-char fileName[24];
-bool conectionStatus = false;
 #define BUTTON_PIN 0
-bool logState = false;
-esp_err_t lastSendStatus = ESP_FAIL;
-int numConnections = 0;
+
 
 Adafruit_NeoPixel strip(1, LED_PIN, NEO_GRB + NEO_KHZ800);  // Create an instance of the Adafruit_NeoPixel class
 
@@ -145,24 +148,48 @@ void updateConnectionStatus(bool status, int targetID) { //MARK: Update connecti
     }
 }
 
-bool waitForActionID(int actionID, int targetID) { //MARK: Wait for action ID
-    unsigned long startTime = millis();
-    bool conectionStatus = false;
 
-    while (!messageReceived || receivedActionID != actionID) {
-        if (millis() - startTime > sendTimeout) {
-            Serial.println("Timeout waiting for action ID");
-            conectionStatus = false;
-            break;
-        }else{
-            conectionStatus = true;
+bool checkConnection(int locTargetID) { //MARK: Check connection
+    esp_err_t result;
+    uint8_t testData[1] = {0}; // Test data to send
+
+    esp_now_register_send_cb(OnDataSent);    // Register send callback
+    result = esp_now_send(broadcastAddresses[locTargetID-1], testData, sizeof(testData));
+
+    if (result == ESP_OK) {     // Check if the message was queued for sending successfully
+        delay(40);              // NEEDED: Delay to allow the send callback to be called
+        if (lastSendStatus == ESP_OK) {        // Check the send status
+            return true;
+        } else {
+            return false;
         }
+    } else {
+        return false;
     }
-    messageReceived = false; // Reset for next message
+}
 
-    //updateConnectionStatus(conectionStatus, targetID);
-    return (conectionStatus);
 
+bool waitForActionID(int actionID, int targetID) { //MARK: Wait for action ID
+    
+    if(checkConnection(targetID)){  //Only request data if the connection is established
+        unsigned long startTime = millis();
+        bool conectionStatus = false;
+
+        while (!messageReceived || receivedActionID != actionID) {
+            if (millis() - startTime > sendTimeout) {
+                Serial.println("Timeout waiting for action ID");
+                conectionStatus = false;
+                break;
+            }else{
+                conectionStatus = true;
+            }
+        }
+        messageReceived = false; // Reset for next message
+
+        //updateConnectionStatus(conectionStatus, targetID);
+        return (true);
+    }
+    return (false);
 }
 
 
@@ -339,24 +366,6 @@ void displayError(String errorMessage = "", int errorNr = 0){ //MARK: Display er
 }
 
 
-bool checkConnection(int locTargetID) { //MARK: Check connection
-    esp_err_t result;
-    uint8_t testData[1] = {0}; // Test data to send
-
-    esp_now_register_send_cb(OnDataSent);    // Register send callback
-    result = esp_now_send(broadcastAddresses[locTargetID-1], testData, sizeof(testData));
-
-    if (result == ESP_OK) {     // Check if the message was queued for sending successfully
-        delay(40);              // NEEDED: Delay to allow the send callback to be called
-        if (lastSendStatus == ESP_OK) {        // Check the send status
-            return true;
-        } else {
-            return false;
-        }
-    } else {
-        return false;
-    }
-}
 
 void displayConectionStatus() { //MARK: Display connection status
     numConnections = 0;
@@ -509,10 +518,17 @@ void setup() {  //MARK: Setup
 void loop() {
     displayTimeStamp();
 
-    static unsigned long previousMillis = 0;
-    unsigned long currentMillis = millis();
-    if (currentMillis - previousMillis >= 1000) {   // Update the connection status only every second, to avoid callback issues
-        previousMillis = currentMillis;
+    static unsigned long previousTempUpdate = 10000;
+    unsigned long currentTempUpdate = millis();
+    if (currentTempUpdate - previousTempUpdate >= 10000) {   // Update the connection status only every second, to avoid callback issues
+        previousTempUpdate = currentTempUpdate;
+        Serial.println("Update Temps_____________________________________");
+    }
+
+    static unsigned long previousConectStat = 1000;
+    unsigned long currentConectStat = millis();
+    if (currentConectStat - previousConectStat >= 1000) {   // Update the connection status only every second, to avoid callback issues
+        previousConectStat = currentConectStat;
         displayConectionStatus();
     }
 
