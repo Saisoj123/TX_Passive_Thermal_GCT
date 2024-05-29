@@ -220,10 +220,62 @@ void getAllTemps() {//MARK: Get temperatures
 }
 
 
+void blinkLED(int red, int green, int blue) {
+    static unsigned long previousMillis = 0;
+    static bool ledState = false;
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - previousMillis >= 1000) {
+        previousMillis = currentMillis;
+        ledState = !ledState;
+
+        if (ledState) {
+            strip.setPixelColor(0, strip.Color(red, green, blue));
+        } else {
+            strip.setPixelColor(0, strip.Color(0, 0, 0));
+        }
+
+        strip.show();
+    }
+}
+
+
+void updateStatusLED(int status){ //MARK: Update status LED
+    switch (status)
+    {
+
+    case 0:
+        strip.setPixelColor(0, strip.Color(0, 0, 0)); // Turn off the LED
+        break;
+    case 1:
+        strip.setPixelColor(0, strip.Color(255, 100, 0));// Set the LED to yellow
+        break;
+    
+    case 2:
+        blinkLED(0, 255, 0); // Blink the LED in green
+        break;
+    
+    case 3:
+        strip.setPixelColor(0, strip.Color(0, 255, 0)); // Set the LED to green
+        break;
+
+    case 4:
+        strip.setPixelColor(0, strip.Color(255, 0, 0)); // Set the LED to red
+    
+    default:
+        break;
+    }
+
+    strip.show();
+}
+
+
 void logLoop() {
     static unsigned long lastExecutionTime = logIntervall;
     unsigned long currentTime = millis();
     
+    updateStatusLED(3);
+
     if (currentTime - lastExecutionTime >= logIntervall) {
         lastExecutionTime = currentTime;
         getAllTemps();
@@ -250,6 +302,9 @@ void displayTimeStamp() {
 }
 
 
+
+
+
 void setup() {  //MARK: Setup
     Serial.begin(115200);
 
@@ -257,6 +312,7 @@ void setup() {  //MARK: Setup
     strip.begin(); // Initialize the NeoPixel library
     strip.show();  // Initialize all pixels to 'off'
     //------------------ NEOPIXEL - INIT - END ------------------
+    updateStatusLED(1);
 
     //------------------ LCD - INIT - BEGIN ------------------
     lcd.init();                     // initialize the lcd
@@ -283,6 +339,7 @@ void setup() {  //MARK: Setup
 
     if (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW");
+        updateStatusLED(4);
         return;
     }
 
@@ -296,6 +353,7 @@ void setup() {  //MARK: Setup
         
         if (esp_now_add_peer(&peerInfo[i]) != ESP_OK){
             Serial.println("Failed to add peer");
+            updateStatusLED(4);
             return;
         }
     }
@@ -304,11 +362,13 @@ void setup() {  //MARK: Setup
     //------------------ SD CARD - INIT - BEGIN ------------------
     if(!SD.begin(CS_PIN)){
         Serial.println("Card Mount Failed");
+        updateStatusLED(4);
         return;
     }
     uint8_t cardType = SD.cardType();
     if(cardType == CARD_NONE){
         Serial.println("No SD card attached");
+        updateStatusLED(4);
         return;
     }
 
@@ -317,6 +377,7 @@ void setup() {  //MARK: Setup
     
     if(!file){
         Serial.println("Failed to open file for writing");
+        updateStatusLED(4);
         return;
     }
 
@@ -324,6 +385,7 @@ void setup() {  //MARK: Setup
 
     //------------------ RTC - INIT - BEGIN ------------------
     if (! rtc.begin()) {
+        updateStatusLED(4);
         Serial.println("Could not find RTC!");
         while (1);
     }
@@ -331,10 +393,17 @@ void setup() {  //MARK: Setup
     //------------------ RTC - INIT - END ------------------
     
     lcd.clear();
+    updateStatusLED(0);
 }
 
 
 void loop() {
     displayTimeStamp();
-    logLoop();
+    
+    if(true){
+        logLoop();
+    }else{
+        updateStatusLED(2);
+    }
+
 }
