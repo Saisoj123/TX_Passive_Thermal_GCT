@@ -43,6 +43,8 @@ char timestamp[19];
 File file;
 char fileName[24];
 bool conectionStatus = false;
+#define BUTTON_PIN 0
+bool logState = false;
 
 Adafruit_NeoPixel strip(1, LED_PIN, NEO_GRB + NEO_KHZ800);  // Create an instance of the Adafruit_NeoPixel class
 
@@ -57,6 +59,16 @@ esp_now_peer_info_t peerInfo[4];
 RTC_DS3231 rtc;
 
 LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 20 chars and 4 line display
+
+bool buttonState(){ //MARK: Button state
+    if (digitalRead(BUTTON_PIN) == LOW){
+        logState = !logState;
+        while(digitalRead(BUTTON_PIN) == LOW){
+            // Wait for button release
+        }
+    }
+    return logState;
+}
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     Serial.print("\r\nLast Packet Send Status:\t");
@@ -323,6 +335,9 @@ void displayError(String errorMessage = "", int errorNr = 0){ //MARK: Display er
 void setup() {  //MARK: Setup
     Serial.begin(115200);
 
+    //------------------ BUTTON - INIT - BEGIN ------------------
+    pinMode(BUTTON_PIN, INPUT);
+    //------------------ BUTTON - INIT - END ------------------
 
     //------------------ NEOPIXEL - INIT - BEGIN ------------------
     strip.begin(); // Initialize the NeoPixel library
@@ -422,9 +437,11 @@ void setup() {  //MARK: Setup
 void loop() {
     displayTimeStamp();
     
-    if(true){
+    if(buttonState()){
         logLoop();
     }else{
         updateStatusLED(2);
     }
+    Serial.print("Button State: ");
+    Serial.println(buttonState());
 }
