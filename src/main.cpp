@@ -302,11 +302,27 @@ void displayTimeStamp() {
 }
 
 
+void displayError(String errorMessage = "", int errorNr = 0){ //MARK: Display error
+    lcd.clear();
+    lcd.setCursor(0, 1);
 
+    if (errorMessage != "" && errorNr != 0){
+        lcd.printf("FATAL ERROR: Nr. %d", errorNr);
+        lcd.setCursor(0, 2);
+        lcd.print(errorMessage);
+    }else if (errorMessage != "" && errorNr == 0){
+        lcd.print("FATAL ERROR:");
+        lcd.setCursor(0, 2);
+        lcd.print(errorMessage);
+    }else{
+        lcd.print("FATAL ERROR (undef.)");
+    }
+}
 
 
 void setup() {  //MARK: Setup
     Serial.begin(115200);
+
 
     //------------------ NEOPIXEL - INIT - BEGIN ------------------
     strip.begin(); // Initialize the NeoPixel library
@@ -339,6 +355,7 @@ void setup() {  //MARK: Setup
 
     if (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW");
+        displayError("Error init ESP-NOW", 6);
         updateStatusLED(4);
         return;
     }
@@ -353,6 +370,7 @@ void setup() {  //MARK: Setup
         
         if (esp_now_add_peer(&peerInfo[i]) != ESP_OK){
             Serial.println("Failed to add peer");
+            displayError("Failed to add peer", 5);
             updateStatusLED(4);
             return;
         }
@@ -362,12 +380,14 @@ void setup() {  //MARK: Setup
     //------------------ SD CARD - INIT - BEGIN ------------------
     if(!SD.begin(CS_PIN)){
         Serial.println("Card Mount Failed");
+        displayError("Card Mount Failed", 4);
         updateStatusLED(4);
         return;
     }
     uint8_t cardType = SD.cardType();
     if(cardType == CARD_NONE){
         Serial.println("No SD card attached");
+        displayError("No SD card attached", 3);
         updateStatusLED(4);
         return;
     }
@@ -377,6 +397,7 @@ void setup() {  //MARK: Setup
     
     if(!file){
         Serial.println("Failed to open file for writing");
+        displayError("Failed to open file", 2);
         updateStatusLED(4);
         return;
     }
@@ -386,14 +407,15 @@ void setup() {  //MARK: Setup
     //------------------ RTC - INIT - BEGIN ------------------
     if (! rtc.begin()) {
         updateStatusLED(4);
-        Serial.println("Could not find RTC!");
+        displayError("Couldn't find RTC", 1);
+        Serial.println("Couldn't find RTC");
         while (1);
     }
     //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //uncomment to set the RTC to the compile time
     //------------------ RTC - INIT - END ------------------
-    
     lcd.clear();
     updateStatusLED(0);
+    Serial.println("Setup completed successfully!");
 }
 
 
@@ -405,5 +427,4 @@ void loop() {
     }else{
         updateStatusLED(2);
     }
-
 }
