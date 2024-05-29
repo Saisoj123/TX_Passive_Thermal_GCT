@@ -5,6 +5,7 @@
 #include <SD.h>
 #include <SPI.h>
 #include <LiquidCrystal_I2C.h>
+#include <Adafruit_NeoPixel.h>
 
 //User variables
 int sendTimeout     = 1000;     //Timeout for waiting for a servent response data in ms
@@ -38,11 +39,12 @@ volatile int receivedActionID = 0;
 temp receivedData;
 char timestamp[19];
 #define CS_PIN 5
+#define LED_PIN 2
 File file;
 char fileName[24];
 bool conectionStatus = false;
 
-
+Adafruit_NeoPixel strip(1, LED_PIN, NEO_GRB + NEO_KHZ800);  // Create an instance of the Adafruit_NeoPixel class
 
 uint8_t broadcastAddresses[][6] = {
     {0x48, 0xE7, 0x29, 0x8C, 0x78, 0x30},
@@ -250,6 +252,11 @@ void displayTimeStamp() {
 
 void setup() {  //MARK: Setup
     Serial.begin(115200);
+
+    //------------------ NEOPIXEL - INIT - BEGIN ------------------
+    strip.begin(); // Initialize the NeoPixel library
+    strip.show();  // Initialize all pixels to 'off'
+    //------------------ NEOPIXEL - INIT - END ------------------
 
     //------------------ LCD - INIT - BEGIN ------------------
     lcd.init();                     // initialize the lcd
