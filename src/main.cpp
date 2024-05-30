@@ -86,8 +86,6 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
         conectionStatus = false;
     }
     lastSendStatus = status == ESP_NOW_SEND_SUCCESS ? ESP_OK : ESP_FAIL;
-
-    //Serial.print(conectionStatus);
 }
 
 void OnDataRecv(const uint8_t *mac_addr, const uint8_t *incomingData, int len) {
@@ -209,7 +207,6 @@ String tempToString(temp t, String timestamp, int serventID) {//MARK: To String
 }
 
 void writeToSD(String dataString) { //MARK: Write to SD
-    //Serial.print (dataString);
     file = SD.open(fileName, FILE_APPEND); // Open the file in append mode
     file.print(dataString);
     file.close();
@@ -245,7 +242,6 @@ void displayTemp(int targetID, temp t) { //MARK: Display temperature
     }
     
     float avgTemp = (t.sens1 + t.sens2 + t.sens3 + t.sens4 + t.sens5 + t.sens6 + t.sens7 + t.sens8 + t.sens9) / 9;
-    //Serial.println("Taget ID: " + String(targetID) + "\tAvg Temp: " + String(avgTemp) + "°C");
     lcd.printf("%.1f", avgTemp);
 }
     
@@ -264,12 +260,12 @@ void getAllTemps() {//MARK: Get temperatures
 }
 
 
-void blinkLED(int red, int green, int blue) {
+void blinkLED(int red, int green, int blue, int blinkIntervall) {
     static unsigned long previousMillis = 0;
     static bool ledState = false;
     unsigned long currentMillis = millis();
 
-    if (currentMillis - previousMillis >= 1000) {
+    if (currentMillis - previousMillis >= blinkIntervall) {
         previousMillis = currentMillis;
         ledState = !ledState;
 
@@ -284,7 +280,7 @@ void blinkLED(int red, int green, int blue) {
 }
 
 
-void updateStatusLED(int status){ //MARK: Update status LED
+void updateStatusLED(int status, int blinkIntervall = 1000){ //MARK: Update status LED
     switch (status)
     {
 
@@ -296,7 +292,7 @@ void updateStatusLED(int status){ //MARK: Update status LED
         break;
     
     case 2:
-        blinkLED(0, 255, 0);    // Blink the LED in green
+        blinkLED(0, 255, 0, blinkIntervall);    // Blink the LED in green
         break;
     
     case 3:
@@ -308,11 +304,15 @@ void updateStatusLED(int status){ //MARK: Update status LED
         break;
 
     case 5:
-        blinkLED(255, 0, 0);    // Blink the LED in red
+        blinkLED(255, 0, 0, blinkIntervall);    // Blink the LED in red
         break;
 
     case 6:
-        blinkLED(255, 100, 0);  // Blink the LED in yellow
+        blinkLED(255, 100, 0, blinkIntervall);  // Blink the LED in yellow
+        break;
+
+    case 7:
+        strip.setPixelColor(0, strip.Color(0, 0, 255)); // Constant blue
         break;
     
     default:
@@ -330,7 +330,7 @@ void logLoop() {    //MARK: Log loop
 
     if (currentTime - previousExecution >= logIntervall) {   // Update the connection status only every second, to avoid callback issues
         previousExecution = currentTime;
-        Serial.println("Logging...");
+        Serial.println("Retrieving Data... ");
         lcd.setCursor(0, 3);
         lcd.print("Retrieving Data...  ");
         getAllTemps();
@@ -512,7 +512,6 @@ void setup() {  //MARK: Setup
     //------------------ RTC - INIT - END ------------------
     lcd.clear();
     updateStatusLED(0);
-    Serial.println("Setup completed successfully!");
 }
 
 
@@ -523,8 +522,6 @@ void loop() {
     unsigned long currentTempUpdate = millis();
     if (currentTempUpdate - previousTempUpdate >= 10000) {   // Update the connection status only every second, to avoid callback issues
         previousTempUpdate = currentTempUpdate;
-
-        //Serial.println("Update Temps_____________________________________");
     }
 
     static unsigned long previousConectStat = pingCheckIntervall;
@@ -562,5 +559,4 @@ void loop() {
         lcd.setCursor(0, 3);
         lcd.print("Idle (ready to log) ");
     }
-    Serial.println("!!! Main loop running !!!");
 }
