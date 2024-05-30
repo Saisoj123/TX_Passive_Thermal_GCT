@@ -10,6 +10,7 @@
 //User variables
 int sendTimeout     = 1000;     //Timeout for waiting for a servent response data in ms
 int logIntervall    = 10000;    //Log intervall in ms
+int pingCheckIntervall = 1000;  //Ping check intervall in ms
 
 // structure to send data
 typedef struct struct_message {
@@ -291,27 +292,27 @@ void updateStatusLED(int status){ //MARK: Update status LED
         strip.setPixelColor(0, strip.Color(0, 0, 0)); // Turn off the LED
         break;
     case 1:
-        strip.setPixelColor(0, strip.Color(255, 100, 0));// Set the LED to yellow
+        strip.setPixelColor(0, strip.Color(255, 100, 0));   // Constant yellow
         break;
     
     case 2:
-        blinkLED(0, 255, 0); // Blink the LED in green
+        blinkLED(0, 255, 0);    // Blink the LED in green
         break;
     
     case 3:
-        strip.setPixelColor(0, strip.Color(0, 255, 0)); // Set the LED to green
+        strip.setPixelColor(0, strip.Color(0, 255, 0)); // Constant green
         break;
 
     case 4:
-        strip.setPixelColor(0, strip.Color(255, 0, 0)); // Set the LED to red
+        strip.setPixelColor(0, strip.Color(255, 0, 0)); // Constant red
         break;
 
     case 5:
-        blinkLED(255, 0, 0); // Blink the LED in red
+        blinkLED(255, 0, 0);    // Blink the LED in red
         break;
 
     case 6:
-        blinkLED(255, 100, 0); // Blink the LED in yellow
+        blinkLED(255, 100, 0);  // Blink the LED in yellow
         break;
     
     default:
@@ -522,12 +523,13 @@ void loop() {
     unsigned long currentTempUpdate = millis();
     if (currentTempUpdate - previousTempUpdate >= 10000) {   // Update the connection status only every second, to avoid callback issues
         previousTempUpdate = currentTempUpdate;
-        Serial.println("Update Temps_____________________________________");
+
+        //Serial.println("Update Temps_____________________________________");
     }
 
-    static unsigned long previousConectStat = 1000;
+    static unsigned long previousConectStat = pingCheckIntervall;
     unsigned long currentConectStat = millis();
-    if (currentConectStat - previousConectStat >= 1000) {   // Update the connection status only every second, to avoid callback issues
+    if (currentConectStat - previousConectStat >= pingCheckIntervall) {   // Update the connection status only every second, to avoid callback issues
         previousConectStat = currentConectStat;
         displayConectionStatus();
     }
