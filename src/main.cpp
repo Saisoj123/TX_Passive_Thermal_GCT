@@ -67,10 +67,22 @@ RTC_DS3231 rtc;
 LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 20 chars and 4 line display
 
 bool buttonState(){ //MARK: Button state
-    if (digitalRead(BUTTON_PIN) == LOW){
+    if (digitalRead(BUTTON_PIN) == LOW){    // If the button is pressed (dont get confused, the button is active low)
         logState = !logState;
         while(digitalRead(BUTTON_PIN) == LOW){
-            // Wait for button release
+            delay(60);
+        }
+
+        if(logState){
+            TXdata.actionID = 1002; //Action ID for getting all temperatures from a servent
+            for (int i = 0; i < 4; i++) {
+                esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
+            }
+        }else{
+            TXdata.actionID = 1003; //Action ID for getting all temperatures from a servent
+            for (int i = 0; i < 4; i++) {
+                esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
+            }
         }
     }
     return logState;
