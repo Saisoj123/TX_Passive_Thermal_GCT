@@ -450,11 +450,11 @@ void setup() {  //MARK: Setup
     //------------------ ESP-NNOW -INIT - BEGIN ------------------
     WiFi.mode(WIFI_STA);
 
-    if (esp_now_init() != ESP_OK) {
+    while (esp_now_init() != ESP_OK) {
         Serial.println("Error initializing ESP-NOW");
         displayError("Error init ESP-NOW", 6);
         updateStatusLED(4);
-        return;
+        delay(3000);
     }
 
     esp_now_register_send_cb(OnDataSent);
@@ -475,38 +475,37 @@ void setup() {  //MARK: Setup
     //------------------ ESP-NNOW -INIT - END ------------------
 
     //------------------ SD CARD - INIT - BEGIN ------------------
-    if(!SD.begin(CS_PIN)){
-        Serial.println("Card Mount Failed");
-        displayError("Card Mount Failed", 4);
-        updateStatusLED(4);
-        return;
+    while(!SD.begin(CS_PIN)){
+        Serial.println("SD Card Mount Failed");
+        displayError("SD Card Mount Failed", 4);
+        updateStatusLED(5);
     }
+
     uint8_t cardType = SD.cardType();
-    if(cardType == CARD_NONE){
+
+    while(cardType == CARD_NONE){
         Serial.println("No SD card attached");
         displayError("No SD card attached", 3);
-        updateStatusLED(4);
-        return;
+        updateStatusLED(5);
     }
 
     strncpy(fileName, "/data_master.csv", sizeof(fileName));
     File file = SD.open(fileName, FILE_WRITE);
     
-    if(!file){
+    while(!file){
         Serial.println("Failed to open file for writing");
         displayError("Failed to open file", 2);
-        updateStatusLED(4);
-        return;
+        updateStatusLED(5);
     }
 
     //------------------ SD CARD - INIT - END ------------------
 
     //------------------ RTC - INIT - BEGIN ------------------
-    if (! rtc.begin()) {
+    while (! rtc.begin()) {
         updateStatusLED(4);
         displayError("Couldn't find RTC", 1);
         Serial.println("Couldn't find RTC");
-        while (1);
+        updateStatusLED(4);
     }
     //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //uncomment to set the RTC to the compile time
     //------------------ RTC - INIT - END ------------------
