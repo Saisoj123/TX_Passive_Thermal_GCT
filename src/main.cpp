@@ -150,10 +150,18 @@ void updateConnectionStatus(bool status, int targetID) { //MARK: Update connecti
 
 bool checkConnection(int locTargetID) { //MARK: Check connection
     esp_err_t result;
-    uint8_t testData[1] = {0}; // Test data to send
+    uint8_t testArray[1] = {0}; // Test data to send
+
+    // structure to Action Code as a connection test
+    typedef struct struct_message {
+        int actionID;
+    } struct_message;
+    struct_message testData;
+
+    testData.actionID = 1001;
 
     esp_now_register_send_cb(OnDataSent);    // Register send callback
-    result = esp_now_send(broadcastAddresses[locTargetID-1], testData, sizeof(testData));
+    result = esp_now_send(broadcastAddresses[locTargetID-1], (uint8_t *) &testData, sizeof(testData));
 
     if (result == ESP_OK) {     // Check if the message was queued for sending successfully
         delay(40);              // NEEDED: Delay to allow the send callback to be called
