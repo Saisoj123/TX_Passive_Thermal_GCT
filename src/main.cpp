@@ -490,7 +490,7 @@ void setup() {  //MARK: Setup
     }
 
     strncpy(fileName, "/data_master.csv", sizeof(fileName));
-    File file = SD.open(fileName, FILE_WRITE);
+    File file = SD.open(fileName, FILE_APPEND);
     
     while(!file){
         Serial.println("Failed to open file for writing");
