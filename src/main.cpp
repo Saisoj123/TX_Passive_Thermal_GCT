@@ -66,26 +66,26 @@ RTC_DS3231 rtc;
 
 LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 20 chars and 4 line display
 
-bool buttonState(){ //MARK: Button state
+void buttonState(){ //MARK: Button state
+    Serial.println("Button Check");
     if (digitalRead(BUTTON_PIN) == LOW){    // If the button is pressed (dont get confused, the button is active low)
         logState = !logState;
         while(digitalRead(BUTTON_PIN) == LOW){
-            delay(60);
+            //delay(60);
         }
 
         if(logState){
-            TXdata.actionID = 1002; //Action ID for getting all temperatures from a servent
+            TXdata.actionID = 1002;
             for (int i = 0; i < 4; i++) {
                 esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
             }
         }else{
-            TXdata.actionID = 1003; //Action ID for getting all temperatures from a servent
+            TXdata.actionID = 1003;
             for (int i = 0; i < 4; i++) {
                 esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
             }
         }
     }
-    return logState;
 }
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -266,14 +266,18 @@ void displayTemp(int targetID, temp t) { //MARK: Display temperature
 }
     
 
-void getAllTemps() {//MARK: Get temperatures
+void getAllTemps(bool save = true) {//MARK: Get temperatures
     TXdata.actionID = 3001; //Action ID for getting all temperatures from a servent
 
     for (int i = 0; i < 4; i++) {
         esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
-        
+
         if (waitForActionID(2001,i+1/*Target ID*/) == true){
-            writeToSD(tempToString(receivedData,get_timestamp(), i+1));
+                
+            if (save == true)
+            {
+                writeToSD(tempToString(receivedData,get_timestamp(), i+1));
+            }
             displayTemp(i+1, receivedData);
         }
     }
@@ -463,8 +467,8 @@ void setup() {  //MARK: Setup
         };
     lcd.createChar(0, tickMark);    // Create a new custom character
 
-    lcd.setCursor(5, 1);            // set cursor to first column, first row
-    lcd.print("Booting...");        // print message
+    lcd.setCursor(8, 0);            // set cursor to first column, first row
+    lcd.print("Boot...");        // print message
     //------------------ LCD - INIT - END ------------------
 
     //------------------ ESP-NNOW -INIT - BEGIN ------------------
@@ -517,6 +521,8 @@ void setup() {  //MARK: Setup
         displayError("Failed to open file", 2);
         updateStatusLED(5);
     }
+    
+    file.close();
 
     //------------------ SD CARD - INIT - END ------------------
 
@@ -529,19 +535,24 @@ void setup() {  //MARK: Setup
     }
     //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //uncomment to set the RTC to the compile time
     //------------------ RTC - INIT - END ------------------
-    lcd.clear();
+    //lcd.clear();
     updateStatusLED(0);
+
+    lcd.setCursor(3, 0);            // set cursor to first column, first row
+    lcd.print("Conecting...");        // print message
 }
 
 
 void loop() {
-    displayTimeStamp();
 
     static unsigned long previousTempUpdate = 10000;
     unsigned long currentTempUpdate = millis();
-    if (currentTempUpdate - previousTempUpdate >= 10000) {   // Update the connection status only every second, to avoid callback issues
+    if (currentTempUpdate - previousTempUpdate >= 10000) {   // Update displayed temperature every 10 seconds
         previousTempUpdate = currentTempUpdate;
+        getAllTemps(false);
     }
+    
+    displayTimeStamp();
 
     static unsigned long previousConectStat = pingCheckIntervall;
     unsigned long currentConectStat = millis();
@@ -559,7 +570,9 @@ void loop() {
         logState = false;
     }
 
-    if(buttonState()){
+    buttonState();
+
+    if(logState){
         if (numConnections == 4){
             updateStatusLED(3);
 
