@@ -8,9 +8,9 @@
 #include <Adafruit_NeoPixel.h>
 
 //User variables
-int sendTimeout     = 1000;     //Timeout for waiting for a servent response data in ms
-int logIntervall    = 10000;    //Log intervall in ms
-int pingCheckIntervall = 1000;  //Ping check intervall in ms
+int sendTimeout         = 1000;     //Timeout for waiting for a servent response data in ms
+int logIntervall        = 5000;     //Log intervall in ms
+int pingCheckIntervall  = 1000;     //Ping check intervall in ms
 
 // structure to send data
 typedef struct struct_message {
@@ -38,9 +38,10 @@ temp RXData;
 volatile bool messageReceived   = false;
 volatile int receivedActionID   = 0;
 int numConnections              = 0;
+int timeLeft                    = 0;
 char timestamp[19];
 char fileName[24];
-bool conectionStatus            = false;
+bool connectionStatus            = false;
 bool logState                   = false;
 esp_err_t lastSendStatus        = ESP_FAIL;
 temp receivedData;
@@ -90,6 +91,9 @@ void buttonState(){ //MARK: Button state
             //delay(60);
         }
         sendLogState(logState);
+        if (logState){
+            timeLeft = 0;
+        }
     }
 }
 
@@ -98,10 +102,10 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     Serial.print("\r\nLast Packet Send Status:\t");
     if (status == ESP_NOW_SEND_SUCCESS) {
         Serial.println("Delivery Success");
-        conectionStatus = true;
+        connectionStatus = true;
     } else {
         Serial.println("Delivery Fail");
-        conectionStatus = false;
+        connectionStatus = false;
     }
     lastSendStatus = status == ESP_NOW_SEND_SUCCESS ? ESP_OK : ESP_FAIL;
 }
@@ -198,20 +202,20 @@ bool waitForActionID(int actionID, int targetID) { //MARK: Wait for action ID
     
     if(checkConnection(targetID)){  //Only request data if the connection is established
         unsigned long startTime = millis();
-        bool conectionStatus = false;
+        bool connectionStatus = false;
 
         while (!messageReceived || receivedActionID != actionID) {
             if (millis() - startTime > sendTimeout) {
                 Serial.println("Timeout waiting for action ID");
-                conectionStatus = false;
+                connectionStatus = false;
                 break;
             }else{
-                conectionStatus = true;
+                connectionStatus = true;
             }
         }
         messageReceived = false; // Reset for next message
 
-        //updateConnectionStatus(conectionStatus, targetID);
+        //updateConnectionStatus(connectionStatus, targetID);
         return (true);
     }
     return (false);
@@ -354,11 +358,10 @@ void updateStatusLED(int status, int blinkIntervall = 1000){ //MARK: Update stat
 
 
 void logLoop() {    //MARK: Log loop
-    static unsigned long previousExecution = 10000;
+    static unsigned long previousExecution = logIntervall;
     unsigned long currentTime = millis();
-    int timeLeft = ((logIntervall)-(currentTime - previousExecution))/1000;
 
-    if (currentTime - previousExecution >= logIntervall) {   // Update the connection status only every second, to avoid callback issues
+    if (timeLeft == 0) {   // Update the connection status only every second, to avoid callback issues
         previousExecution = currentTime;
         Serial.println("Retrieving Data... ");
         lcd.setCursor(0, 3);
@@ -368,8 +371,14 @@ void logLoop() {    //MARK: Log loop
         lcd.setCursor(0, 3);
         lcd.print("Logging:");
         lcd.setCursor(8, 3);
-        lcd.printf(" %.d s        ",timeLeft+1);
+        lcd.printf(" %.d s        ",timeLeft);
     }
+
+    timeLeft = ((logIntervall)-(currentTime - (previousExecution + 1000)))/1000;
+    
+    Serial.println(timeLeft);
+    Serial.println(currentTime);
+    Serial.println(previousExecution);
 }
 
 
@@ -398,7 +407,7 @@ void displayError(String errorMessage = "", int errorNr = 0){ //MARK: Display er
 
 
 
-void displayConectionStatus() { //MARK: Display connection status
+void displayConnectionStatus() { //MARK: Display connection status
     numConnections = 0;
 
     lcd.setCursor(0, 1);
@@ -545,7 +554,7 @@ void setup() {  //MARK: Setup
     updateStatusLED(0);
 
     lcd.setCursor(3, 0);            // set cursor to first column, first row
-    lcd.print("Conecting...");        // print message
+    lcd.print("Connecting...");        // print message
 }
 
 
@@ -560,18 +569,18 @@ void loop() {
     
     displayTimeStamp();
 
-    static unsigned long previousConectStat = pingCheckIntervall;
-    unsigned long currentConectStat = millis();
-    if (currentConectStat - previousConectStat >= pingCheckIntervall) {   // Update the connection status only every second, to avoid callback issues
-        previousConectStat = currentConectStat;
-        displayConectionStatus();
+    static unsigned long previousConnectStat = pingCheckIntervall;
+    unsigned long currentConnectStat = millis();
+    if (currentConnectStat - previousConnectStat >= pingCheckIntervall) {   // Update the connection status only every second, to avoid callback issues
+        previousConnectStat = currentConnectStat;
+        displayConnectionStatus();
         sendLogState(logState);
     }
 
     while(numConnections == 0){
         lcd.setCursor(0, 3);
         lcd.print("ERROR: No connection");
-        displayConectionStatus();
+        displayConnectionStatus();
         updateStatusLED(5);
         displayTimeStamp();
         logState = false;
@@ -581,18 +590,18 @@ void loop() {
 
     if(logState){
         if (numConnections == 4){
-            updateStatusLED(3);
+            updateStatusLED(3); // Constant green
 
         }else{
-            updateStatusLED(1);
+            updateStatusLED(1); // Constant yellow
             logLoop();
         }
 
     }else{
         if (numConnections == 4){
-            updateStatusLED(2);
+            updateStatusLED(2); // Blink green
         }else{
-            updateStatusLED(6);
+            updateStatusLED(6); // Blink yellow
         }
 
         lcd.setCursor(0, 3);
