@@ -66,6 +66,22 @@ RTC_DS3231 rtc;
 
 LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 20 chars and 4 line display
 
+
+void sendLogState(bool logState){
+        if(logState){
+        TXdata.actionID = 1002;
+        for (int i = 0; i < 4; i++) {
+            esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
+        }
+    }else{
+        TXdata.actionID = 1003;
+        for (int i = 0; i < 4; i++) {
+            esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
+        }
+    }
+}
+
+
 void buttonState(){ //MARK: Button state
     Serial.println("Button Check");
     if (digitalRead(BUTTON_PIN) == LOW){    // If the button is pressed (dont get confused, the button is active low)
@@ -73,20 +89,10 @@ void buttonState(){ //MARK: Button state
         while(digitalRead(BUTTON_PIN) == LOW){
             //delay(60);
         }
-
-        if(logState){
-            TXdata.actionID = 1002;
-            for (int i = 0; i < 4; i++) {
-                esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
-            }
-        }else{
-            TXdata.actionID = 1003;
-            for (int i = 0; i < 4; i++) {
-                esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
-            }
-        }
+        sendLogState(logState);
     }
 }
+
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     Serial.print("\r\nLast Packet Send Status:\t");
@@ -559,6 +565,7 @@ void loop() {
     if (currentConectStat - previousConectStat >= pingCheckIntervall) {   // Update the connection status only every second, to avoid callback issues
         previousConectStat = currentConectStat;
         displayConectionStatus();
+        sendLogState(logState);
     }
 
     while(numConnections == 0){
