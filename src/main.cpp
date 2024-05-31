@@ -236,12 +236,6 @@ String tempToString(temp t, String timestamp, int serventID) {//MARK: To String
     return data;
 }
 
-void writeToSD(String dataString) { //MARK: Write to SD
-    file = SD.open(fileName, FILE_APPEND); // Open the file in append mode
-    file.print(dataString);
-    file.close();
-}
-
 
 const char* get_timestamp() {
     DateTime now = rtc.now();
@@ -275,24 +269,6 @@ void displayTemp(int targetID, temp t) { //MARK: Display temperature
     lcd.printf("%.1f", avgTemp);
 }
     
-
-void getAllTemps(bool save = true) {//MARK: Get temperatures
-    TXdata.actionID = 3001; //Action ID for getting all temperatures from a servent
-
-    for (int i = 0; i < 4; i++) {
-        esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
-
-        if (waitForActionID(2001,i+1/*Target ID*/) == true){
-                
-            if (save == true)
-            {
-                writeToSD(tempToString(receivedData,get_timestamp(), i+1));
-            }
-            displayTemp(i+1, receivedData);
-        }
-    }
-}
-
 
 void blinkLED(int red, int green, int blue, int blinkIntervall) {
     static unsigned long previousMillis = 0;
@@ -357,31 +333,6 @@ void updateStatusLED(int status, int blinkIntervall = 1000){ //MARK: Update stat
 }
 
 
-void logLoop() {    //MARK: Log loop
-    static unsigned long previousExecution = logIntervall;
-    unsigned long currentTime = millis();
-
-    if (timeLeft == 0) {   // Update the connection status only every second, to avoid callback issues
-        previousExecution = currentTime;
-        Serial.println("Retrieving Data... ");
-        lcd.setCursor(0, 3);
-        lcd.print("Retrieving Data...  ");
-        getAllTemps();
-    }else{
-        lcd.setCursor(0, 3);
-        lcd.print("Logging:");
-        lcd.setCursor(8, 3);
-        lcd.printf(" %.d s        ",timeLeft);
-    }
-
-    timeLeft = ((logIntervall)-(currentTime - (previousExecution + 1000)))/1000;
-    
-    Serial.println(timeLeft);
-    Serial.println(currentTime);
-    Serial.println(previousExecution);
-}
-
-
 void displayTimeStamp() {
     lcd.setCursor(0, 0);
     lcd.print(get_timestamp());
@@ -405,6 +356,81 @@ void displayError(String errorMessage = "", int errorNr = 0){ //MARK: Display er
     }
 }
 
+
+void writeToSD(String dataString) { //MARK: Write to SD
+    file = SD.open(fileName, FILE_APPEND); // Open the file in append mode
+    file.print(dataString);
+
+    if (!file){
+        Serial.println("Failed to write to file");
+        lcd.clear();
+        lcd.home();
+        lcd.print("FATAL ERROR: Nr.2");
+        lcd.setCursor(0, 1);
+        lcd.print("Failed to open File");
+        lcd.setCursor(0, 2);
+        lcd.print("Check SD Card and");
+        lcd.setCursor(0, 3);
+        lcd.print("Reset the Device");
+
+        while (true)
+        {
+            updateStatusLED(5);
+        }
+    }
+
+    while(!file){
+        Serial.println("Failed to open file for writing");
+        displayError("Failed to open file", 2);
+        updateStatusLED(5);
+        delay(1000);
+    }
+
+    file.close();
+}
+
+
+void getAllTemps(bool save = true) {//MARK: Get temperatures
+    TXdata.actionID = 3001; //Action ID for getting all temperatures from a servent
+
+    for (int i = 0; i < 4; i++) {
+        esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
+
+        if (waitForActionID(2001,i+1/*Target ID*/) == true){
+                
+            if (save == true)
+            {
+                writeToSD(tempToString(receivedData,get_timestamp(), i+1));
+            }
+            displayTemp(i+1, receivedData);
+        }
+    }
+}
+
+
+void logLoop() {    //MARK: Log loop
+    static unsigned long previousExecution = logIntervall;
+    unsigned long currentTime = millis();
+
+    if (timeLeft == 0) {   // Update the connection status only every second, to avoid callback issues
+        previousExecution = currentTime;
+        Serial.println("Retrieving Data... ");
+        lcd.setCursor(0, 3);
+        lcd.print("Retrieving Data...  ");
+        getAllTemps();
+    }else{
+        lcd.setCursor(0, 3);
+        lcd.print("Logging:");
+        lcd.setCursor(8, 3);
+        lcd.printf(" %.d s        ",timeLeft);
+    }
+
+    timeLeft = ((logIntervall)-(currentTime - (previousExecution + 1000)))/1000;
+    
+    Serial.println(timeLeft);
+    Serial.println(currentTime);
+    Serial.println(previousExecution);
+}
 
 
 void displayConnectionStatus() { //MARK: Display connection status
