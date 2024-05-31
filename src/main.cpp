@@ -553,7 +553,7 @@ void loop() {
 
     static unsigned long previousTempUpdate = 10000;
     unsigned long currentTempUpdate = millis();
-    if (currentTempUpdate - previousTempUpdate >= 10000) {   // Update displayed temperature every 10 seconds
+    if (currentTempUpdate - previousTempUpdate >= 10000 && logState == false) {   // Update displayed temperature every 10 seconds
         previousTempUpdate = currentTempUpdate;
         getAllTemps(false);
     }
