@@ -245,7 +245,10 @@ const char* get_timestamp() {
 
 
 void displayTemp(int targetID, temp t) { //MARK: Display temperature
-    
+
+    lcd.setCursor(0, 2);                // Set cursor to the second row
+    lcd.print("                    ");  // Clear the line
+
     switch (targetID)
     {
         case 1:
@@ -297,6 +300,7 @@ void updateStatusLED(int status, int blinkIntervall = 1000){ //MARK: Update stat
     case 0:
         strip.setPixelColor(0, strip.Color(0, 0, 0)); // Turn off the LED
         break;
+
     case 1:
         strip.setPixelColor(0, strip.Color(255, 100, 0));   // Constant yellow
         break;
@@ -319,10 +323,6 @@ void updateStatusLED(int status, int blinkIntervall = 1000){ //MARK: Update stat
 
     case 6:
         blinkLED(255, 100, 0, blinkIntervall);  // Blink the LED in yellow
-        break;
-
-    case 7:
-        strip.setPixelColor(0, strip.Color(0, 0, 255)); // Constant blue
         break;
     
     default:
@@ -427,9 +427,9 @@ void logLoop() {    //MARK: Log loop
 
     timeLeft = ((logIntervall)-(currentTime - (previousExecution + 1000)))/1000;
     
-    Serial.println(timeLeft);
-    Serial.println(currentTime);
-    Serial.println(previousExecution);
+    // Serial.println(timeLeft);
+    // Serial.println(currentTime);
+    // Serial.println(previousExecution);
 }
 
 
