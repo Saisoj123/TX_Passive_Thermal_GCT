@@ -49,7 +49,7 @@ File file;
 
 // Pin definitions
 #define CS_PIN 5
-#define LED_PIN 2
+#define LED_PIN 4
 #define BUTTON_PIN 0
 
 
