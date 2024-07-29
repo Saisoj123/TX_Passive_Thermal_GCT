@@ -1,3 +1,12 @@
+// Bugs to fix
+// TODO: occasionally the loging timer goes to 42947XXX seconds
+// TODO: button press is not always detected
+// TODO: temperature is not displayed for all servents
+// X TODO: temperature values from offline-targets are replaced with the value of the last online-target on the display
+// X TODO: temperature values from offline-targets are replaced with the value of the last online-target in the log file
+
+
+
 #include <esp_now.h>
 #include <WiFi.h>
 #include <RTClib.h>
@@ -56,10 +65,10 @@ File file;
 Adafruit_NeoPixel strip(1, LED_PIN, NEO_GRB + NEO_KHZ800);  // Create an instance of the Adafruit_NeoPixel class
 
 uint8_t broadcastAddresses[][6] = {
-    {0x48, 0xE7, 0x29, 0x8C, 0x78, 0x30},
-    {0x48, 0xE7, 0x29, 0x29, 0x79, 0x68},
+    {0x48, 0xE7, 0x29, 0x8C, 0x79, 0x68},
     {0x48, 0xE7, 0x29, 0x8C, 0x73, 0x18},
-    {0x48, 0xE7, 0x29, 0x8C, 0x72, 0x50}
+    {0x48, 0xE7, 0x29, 0x8C, 0x78, 0x30},
+    {0x48, 0xE7, 0x29, 0x8C, 0x72, 0x50}    
 };
 esp_now_peer_info_t peerInfo[4];
 
@@ -205,13 +214,13 @@ bool checkConnection(int locTargetID) { //MARK: Check connection
 
 bool waitForActionID(int actionID, int targetID) { //MARK: Wait for action ID
     
-    if(checkConnection(targetID)){  //Only request data if the connection is established
+    // if(checkConnection(targetID)){  //Only request data if the connection is established
         unsigned long startTime = millis();
         bool connectionStatus = false;
 
         while (!messageReceived || receivedActionID != actionID) {
             if (millis() - startTime > sendTimeout) {
-                Serial.println("Timeout waiting for action ID");
+                Serial.println("Timeout waiting for action ID on target: " + String(targetID));
                 connectionStatus = false;
                 break;
             }else{
@@ -223,8 +232,8 @@ bool waitForActionID(int actionID, int targetID) { //MARK: Wait for action ID
         //updateConnectionStatus(connectionStatus, targetID);
         return (true);
     }
-    return (false);
-}
+    // return (false);
+// }
 
 
 String tempToString(temp t, String timestamp, int serventID) {//MARK: To String
@@ -273,8 +282,12 @@ void displayTemp(int targetID, temp t) { //MARK: Display temperature
             break;
     }
     
-    float avgTemp = (t.sens1 + t.sens2 + t.sens3 + t.sens4 + t.sens5 + t.sens6 + t.sens7 + t.sens8 + t.sens9) / 9;
-    lcd.printf("%.1f", avgTemp);
+    if (checkConnection(targetID)) {
+        float avgTemp = (t.sens1 + t.sens2 + t.sens3 + t.sens4 + t.sens5 + t.sens6 + t.sens7 + t.sens8 + t.sens9) / 9;
+        lcd.printf("%.1f", avgTemp);
+    }else{
+        lcd.print(" -   ");
+    }
 }
     
 
@@ -405,7 +418,11 @@ void getAllTemps(bool save = true) {//MARK: Get temperatures
                 
             if (save == true)
             {
-                writeToSD(tempToString(receivedData,get_timestamp(), i+1));
+                if (checkConnection(i+1)) {
+                    writeToSD(tempToString(receivedData,get_timestamp(), i+1));
+                }else{
+                    writeToSD(String(get_timestamp()) + "," + String(i+1) + ",123456789,NAN\n");
+                }
             }
             displayTemp(i+1, receivedData);
         }
