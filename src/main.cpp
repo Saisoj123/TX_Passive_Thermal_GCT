@@ -41,7 +41,7 @@ int numConnections              = 0;
 int timeLeft                    = 0;
 char timestamp[19];
 char fileName[24];
-bool connectionStatus            = false;
+bool connectionStatus           = false;
 bool logState                   = false;
 esp_err_t lastSendStatus        = ESP_FAIL;
 temp receivedData;
@@ -105,7 +105,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
     Serial.print(mac_addr[2], HEX); Serial.print(":");
     Serial.print(mac_addr[3], HEX); Serial.print(":");
     Serial.print(mac_addr[4], HEX); Serial.print(":");
-    Serial.print(mac_addr[5], HEX); Serial.print("  -->  ");
+    Serial.print(mac_addr[5], HEX); Serial.print(" --> ");
 
     if (status == ESP_NOW_SEND_SUCCESS) {
         Serial.println("Delivery Success");
@@ -134,8 +134,6 @@ void SerialUserInput() {
 
     for (int i = 0; i < 4; i++) {
         esp_err_t result = esp_now_send(broadcastAddresses[i], (uint8_t *) &TXdata, sizeof(TXdata));
-         
-        
     }
 }
 
