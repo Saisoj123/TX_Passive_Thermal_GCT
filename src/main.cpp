@@ -1,11 +1,12 @@
 // Bugs to fix
 // TODO: occasionally the loging timer goes to 42947XXX seconds
 // TODO: button press is not always detected
-// TODO: temperature is not displayed for all servents at once
+// X TODO: temperature is not displayed for all servents at once
 // X TODO: temperature values from offline-targets are replaced with the value of the last online-target on the display
 // X TODO: temperature values from offline-targets are replaced with the value of the last online-target in the log file
 // X TODO: display does not reset propperly after a fatal error-display
 // TODO: temperture values are not compleatly over written on the display (could be a problem, when the number of digits reduces)
+// TODO: display and LED freezes during the temperature request (display "Updating Temperature")
 
 
 
@@ -20,8 +21,9 @@
 
 //User variables
 int sendTimeout         = 1000;     //Timeout for waiting for a servent response data in ms
-int logIntervall        = 5000;     //Log intervall in ms
+int logIntervall        = 10000;     //Log intervall in ms
 int pingCheckIntervall  = 1000;     //Ping check intervall in ms
+int tempUpdateIntervall = 10000;    //Temperature update intervall in ms
 
 // structure to send data
 typedef struct struct_message {
@@ -409,6 +411,11 @@ void writeToSD(String dataString) { //MARK: Write to SD
 
 
 void getAllTemps(bool save = true) {//MARK: Get temperatures
+
+    updateStatusLED(0);
+    lcd.setCursor(0, 3);
+    lcd.print("Updating Temperature");
+
     TXdata.actionID = 3001; //Action ID for getting all temperatures from a servent
 
     for (int i = 0; i < 4; i++) {
@@ -609,9 +616,9 @@ void setup() {  //MARK: Setup
 
 void loop() {
 
-    static unsigned long previousTempUpdate = 10000;
+    static unsigned long previousTempUpdate = tempUpdateIntervall;
     unsigned long currentTempUpdate = millis();
-    if (currentTempUpdate - previousTempUpdate >= 10000 && logState == false) {   // Update displayed temperature every 10 seconds
+    if (currentTempUpdate - previousTempUpdate >= tempUpdateIntervall && logState == false) {   // Update displayed temperature every 10 seconds
         previousTempUpdate = currentTempUpdate;
         getAllTemps(false);
     }
