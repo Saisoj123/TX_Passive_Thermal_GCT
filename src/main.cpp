@@ -1,9 +1,11 @@
 // Bugs to fix
 // TODO: occasionally the loging timer goes to 42947XXX seconds
 // TODO: button press is not always detected
-// TODO: temperature is not displayed for all servents
+// TODO: temperature is not displayed for all servents at once
 // X TODO: temperature values from offline-targets are replaced with the value of the last online-target on the display
 // X TODO: temperature values from offline-targets are replaced with the value of the last online-target in the log file
+// X TODO: display does not reset propperly after a fatal error-display
+// TODO: temperture values are not compleatly over written on the display (could be a problem, when the number of digits reduces)
 
 
 
@@ -260,9 +262,6 @@ const char* get_timestamp() {
 
 void displayTemp(int targetID, temp t) { //MARK: Display temperature
 
-    lcd.setCursor(0, 2);                // Set cursor to the second row
-    lcd.print("                    ");  // Clear the line
-
     switch (targetID)
     {
         case 1:
@@ -281,12 +280,13 @@ void displayTemp(int targetID, temp t) { //MARK: Display temperature
             lcd.setCursor(15, 2);
             break;
     }
-    
+
     if (checkConnection(targetID)) {
         float avgTemp = (t.sens1 + t.sens2 + t.sens3 + t.sens4 + t.sens5 + t.sens6 + t.sens7 + t.sens8 + t.sens9) / 9;
+
         lcd.printf("%.1f", avgTemp);
     }else{
-        lcd.print(" -   ");
+        lcd.print("  -  ");
     }
 }
     
@@ -601,8 +601,9 @@ void setup() {  //MARK: Setup
     //lcd.clear();
     updateStatusLED(0);
 
+    lcd.clear();
     lcd.setCursor(3, 0);            // set cursor to first column, first row
-    lcd.print("Connecting...");        // print message
+    lcd.print("Connecting...");     // print message
 }
 
 
