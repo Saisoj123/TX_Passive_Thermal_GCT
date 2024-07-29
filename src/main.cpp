@@ -58,7 +58,7 @@ Adafruit_NeoPixel strip(1, LED_PIN, NEO_GRB + NEO_KHZ800);  // Create an instanc
 uint8_t broadcastAddresses[][6] = {
     {0x48, 0xE7, 0x29, 0x8C, 0x78, 0x30},
     {0x48, 0xE7, 0x29, 0x29, 0x79, 0x68},
-    {0x48, 0xE7, 0x29, 0x8C, 0x6B, 0x5C},
+    {0x48, 0xE7, 0x29, 0x8C, 0x73, 0x18},
     {0x48, 0xE7, 0x29, 0x8C, 0x72, 0x50}
 };
 esp_now_peer_info_t peerInfo[4];
@@ -84,7 +84,7 @@ void sendLogState(bool logState){
 
 
 void buttonState(){ //MARK: Button state
-    Serial.println("Button Check");
+    // Serial.println("Button Check");
     if (digitalRead(BUTTON_PIN) == LOW){    // If the button is pressed (dont get confused, the button is active low)
         logState = !logState;
         while(digitalRead(BUTTON_PIN) == LOW){
@@ -99,7 +99,14 @@ void buttonState(){ //MARK: Button state
 
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-    Serial.print("\r\nLast Packet Send Status:\t");
+
+    Serial.print(mac_addr[0], HEX); Serial.print(":");
+    Serial.print(mac_addr[1], HEX); Serial.print(":");
+    Serial.print(mac_addr[2], HEX); Serial.print(":");
+    Serial.print(mac_addr[3], HEX); Serial.print(":");
+    Serial.print(mac_addr[4], HEX); Serial.print(":");
+    Serial.print(mac_addr[5], HEX); Serial.print("  -->  ");
+
     if (status == ESP_NOW_SEND_SUCCESS) {
         Serial.println("Delivery Success");
         connectionStatus = true;
