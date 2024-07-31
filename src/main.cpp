@@ -511,6 +511,9 @@ void displayConnectionStatus() { //MARK: Display connection status
 void setup() {  //MARK: Setup
     Serial.begin(115200);
 
+    Serial.println("\n\n\nSELF CHECK:\n");
+
+
     //------------------ BUTTON - INIT - BEGIN ------------------
     pinMode(BUTTON_PIN, INPUT);
     //------------------ BUTTON - INIT - END ------------------
@@ -545,11 +548,12 @@ void setup() {  //MARK: Setup
     WiFi.mode(WIFI_STA);
 
     while (esp_now_init() != ESP_OK) {
-        Serial.println("Error initializing ESP-NOW");
+        Serial.println("ESP-NOW Initialization:\tFailed");
         displayError("Error init ESP-NOW", 6);
         updateStatusLED(4);
         delay(3000);
     }
+    Serial.println("ESP-NOW Initialization:\tSuccess");
 
     esp_now_register_send_cb(OnDataSent);
     esp_now_register_recv_cb(OnDataRecv);
@@ -560,10 +564,12 @@ void setup() {  //MARK: Setup
         peerInfo[i].encrypt = false;
         
         if (esp_now_add_peer(&peerInfo[i]) != ESP_OK){
-            Serial.println("Failed to add peer");
+            Serial.println("ESP-NOW Peer Addition:\tFailed");
             displayError("Failed to add peer", 5);
             updateStatusLED(4);
             return;
+        }else{
+            Serial.println("ESP-NOW Peer Addition:\tSuccess");
         }
     }
     //------------------ ESP-NNOW -INIT - END ------------------
@@ -578,39 +584,48 @@ void setup() {  //MARK: Setup
     uint8_t cardType = SD.cardType();
 
     while(cardType == CARD_NONE){
-        Serial.println("No SD card attached");
-        displayError("No SD card attached", 3);
         updateStatusLED(5);
+        Serial.println("SD Card Mount:\t\tFailed");
+        displayError("SD Card Mount Failed", 2);
     }
+    Serial.println("SD Card Mount:\t\tSuccess");
 
     strncpy(fileName, "/data_master.csv", sizeof(fileName));
     File file = SD.open(fileName, FILE_APPEND);
     
     while(!file){
-        Serial.println("Failed to open file for writing");
-        displayError("Failed to open file", 2);
+        Serial.println("Writing to file:\tFailed");
         updateStatusLED(5);
+        displayError("Failed to open file", 2);
     }
+    Serial.println("Writing to file:\tSuccess");
+
     
     file.close();
 
     //------------------ SD CARD - INIT - END ------------------
 
     //------------------ RTC - INIT - BEGIN ------------------
-    while (! rtc.begin()) {
-        updateStatusLED(4);
-        displayError("Couldn't find RTC", 1);
-        Serial.println("Couldn't find RTC");
-        updateStatusLED(4);
-    }
+  if (! rtc.begin()) {
+    Serial.println("Init RTC:\t\tFailed");
+    updateStatusLED(4);
+    while (true){}
+    } else {
+      Serial.print("Init RTC:\t\tSuccess (");
+      Serial.print(get_timestamp());
+      Serial.println(")"); 
+  }
     //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //uncomment to set the RTC to the compile time
     //------------------ RTC - INIT - END ------------------
     //lcd.clear();
-    updateStatusLED(0);
 
     lcd.clear();
     lcd.setCursor(3, 0);            // set cursor to first column, first row
     lcd.print("Connecting...");     // print message
+
+    Serial.println("\nSELF-CHECK COMPLET\n\n\n");
+    
+    updateStatusLED(0);
 }
 
 
