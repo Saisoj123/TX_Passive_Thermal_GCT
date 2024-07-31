@@ -548,12 +548,12 @@ void setup() {  //MARK: Setup
     WiFi.mode(WIFI_STA);
 
     while (esp_now_init() != ESP_OK) {
-        Serial.println("ESP-NOW Initialization:\tFailed");
+        Serial.println("ESP-NOW Initialization:\t\t\tFailed");
         displayError("Error init ESP-NOW", 6);
         updateStatusLED(4);
         delay(3000);
     }
-    Serial.println("ESP-NOW Initialization:\tSuccess");
+    Serial.println("ESP-NOW Initialization:\t\t\tSuccess");
 
     esp_now_register_send_cb(OnDataSent);
     esp_now_register_recv_cb(OnDataRecv);
@@ -564,12 +564,12 @@ void setup() {  //MARK: Setup
         peerInfo[i].encrypt = false;
         
         if (esp_now_add_peer(&peerInfo[i]) != ESP_OK){
-            Serial.println("ESP-NOW Peer Addition:\tFailed");
+            Serial.println("ESP-NOW Peer Addition (Target " + String(i+1) + "):\tFailed");
             displayError("Failed to add peer", 5);
             updateStatusLED(4);
             return;
         }else{
-            Serial.println("ESP-NOW Peer Addition:\tSuccess");
+            Serial.print("ESP-NOW Peer Addition (Target " + String(i+1) + "):\tSuccess\n");
         }
     }
     //------------------ ESP-NNOW -INIT - END ------------------
@@ -585,20 +585,20 @@ void setup() {  //MARK: Setup
 
     while(cardType == CARD_NONE){
         updateStatusLED(5);
-        Serial.println("SD Card Mount:\t\tFailed");
+        Serial.println("SD Card Mount:\t\t\t\tFailed");
         displayError("SD Card Mount Failed", 2);
     }
-    Serial.println("SD Card Mount:\t\tSuccess");
+    Serial.println("SD Card Mount:\t\t\t\tSuccess");
 
     strncpy(fileName, "/data_master.csv", sizeof(fileName));
     File file = SD.open(fileName, FILE_APPEND);
     
     while(!file){
-        Serial.println("Writing to file:\tFailed");
+        Serial.println("Writing to file:\t\t\tFailed");
         updateStatusLED(5);
         displayError("Failed to open file", 2);
     }
-    Serial.println("Writing to file:\tSuccess");
+    Serial.println("Writing to file:\t\t\tSuccess");
 
     
     file.close();
@@ -607,11 +607,11 @@ void setup() {  //MARK: Setup
 
     //------------------ RTC - INIT - BEGIN ------------------
   if (! rtc.begin()) {
-    Serial.println("Init RTC:\t\tFailed");
+    Serial.println("Init RTC:\t\t\t\tFailed");
     updateStatusLED(4);
     while (true){}
     } else {
-      Serial.print("Init RTC:\t\tSuccess (");
+      Serial.print("Init RTC:\t\t\t\tSuccess (");
       Serial.print(get_timestamp());
       Serial.println(")"); 
   }
