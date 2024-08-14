@@ -5,8 +5,10 @@
 // X TODO: temperature values from offline-targets are replaced with the value of the last online-target on the display
 // X TODO: temperature values from offline-targets are replaced with the value of the last online-target in the log file
 // X TODO: display does not reset propperly after a fatal error-display
+// TODO: when connection is lost, the display does still show the last temperature values
 // TODO: temperture values are not compleatly over written on the display (could be a problem, when the number of digits reduces)
 // TODO: display and LED freezes during the temperature request (display "Updating Temperature")
+// TODO: status LED and ERROR message accasionally (and only very briefly) display "No connection" even if the connection is established
 
 
 
@@ -21,7 +23,7 @@
 
 //User variables
 int sendTimeout         = 1000;     //Timeout for waiting for a servent response data in ms
-int logIntervall        = 10000;     //Log intervall in ms
+int logIntervall        = 10000;    //Log intervall in ms (>= 10000 ms = 10s)
 int pingCheckIntervall  = 1000;     //Ping check intervall in ms
 int tempUpdateIntervall = 10000;    //Temperature update intervall in ms
 
@@ -71,7 +73,7 @@ Adafruit_NeoPixel strip(1, LED_PIN, NEO_GRB + NEO_KHZ800);  // Create an instanc
 uint8_t broadcastAddresses[][6] = {
     {0x48, 0xE7, 0x29, 0x8C, 0x79, 0x68},
     {0x48, 0xE7, 0x29, 0x8C, 0x73, 0x18},
-    {0x48, 0xE7, 0x29, 0x8C, 0x78, 0x30},
+    {0x4C, 0x11, 0xAE, 0x65, 0xBD, 0x54},
     {0x48, 0xE7, 0x29, 0x8C, 0x72, 0x50}    
 };
 esp_now_peer_info_t peerInfo[4];
@@ -620,7 +622,7 @@ void setup() {  //MARK: Setup
     //lcd.clear();
 
     lcd.clear();
-    lcd.setCursor(3, 0);            // set cursor to first column, first row
+    lcd.setCursor(4, 0);            // set cursor to first column, first row
     lcd.print("Connecting...");     // print message
 
     Serial.println("\nSELF-CHECK COMPLET\n\n\n");
@@ -662,6 +664,7 @@ void loop() {
     if(logState){
         if (numConnections == 4){
             updateStatusLED(3); // Constant green
+            logLoop();
 
         }else{
             updateStatusLED(1); // Constant yellow
