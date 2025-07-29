@@ -2,5 +2,6 @@
     "files.associations": {
         "*.tcc": "cpp",
         "algorithm": "cpp"
-    }
+    },
+    "C_Cpp.default.compilerPath": "C:/Users/kern008/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-gcc.exe"
 }

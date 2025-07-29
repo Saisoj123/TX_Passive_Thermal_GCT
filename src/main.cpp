@@ -1,3 +1,16 @@
+/*
+ * TX Passive Thermal GCT - Master ESP32
+ * 
+ * Original code base: https://github.com/MoritzNelle/TX_Passive_Thermal_GCT
+ * Enhanced by Josias Kern using GitHub Copilot (GPT-4)
+ * 
+ * Enhancements include:
+ * - WiFi connectivity and NTP time synchronization
+ * - Watchdog timer for system reliability
+ * - Improved error handling and recovery
+ * - Robust SD card and RTC operations
+ */
+
 // Bugs to fix
 // TODO: occasionally the loging timer goes to 42947XXX seconds
 // TODO: button press is not always detected
@@ -20,12 +33,23 @@
 #include <SPI.h>
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_NeoPixel.h>
+#include <time.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <esp_task_wdt.h>
 
 //User variables
 int sendTimeout         = 1000;     //Timeout for waiting for a servent response data in ms
 int logIntervall        = 10000;    //Log intervall in ms (>= 10000 ms = 10s)
 int pingCheckIntervall  = 1000;     //Ping check intervall in ms
 int tempUpdateIntervall = 10000;    //Temperature update intervall in ms
+
+// WiFi and NTP configuration
+const char* ssid = "VodafoneMobileWiFi-A8E1";        // Replace with your WiFi network name
+const char* password = "I5IJ4ij4"; // Replace with your WiFi password
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 3600;            // GMT+1 for Amsterdam (CET)
+const int daylightOffset_sec = 3600;        // +1 hour for summer time (CEST)
 
 // structure to send data
 typedef struct struct_message {
@@ -61,6 +85,11 @@ bool logState                   = false;
 esp_err_t lastSendStatus        = ESP_FAIL;
 temp receivedData;
 File file;
+
+// Connection state tracking
+unsigned long lastConnectionCheck[4] = {0, 0, 0, 0};
+bool deviceOnline[4] = {false, false, false, false};
+const unsigned long CONNECTION_TIMEOUT = 5000; // 5 seconds
 
 // Pin definitions
 #define CS_PIN 5
@@ -99,17 +128,31 @@ void sendLogState(bool logState){
 
 
 void buttonState(){ //MARK: Button state
-    // Serial.println("Button Check");
-    if (digitalRead(BUTTON_PIN) == LOW){    // If the button is pressed (dont get confused, the button is active low)
-        logState = !logState;
-        while(digitalRead(BUTTON_PIN) == LOW){
-            //delay(60);
-        }
-        sendLogState(logState);
-        if (logState){
-            timeLeft = 0;
+    static unsigned long lastButtonPress = 0;
+    static bool lastButtonState = HIGH;
+    const unsigned long debounceDelay = 50;
+    
+    bool currentButtonState = digitalRead(BUTTON_PIN);
+    
+    // Check if button state changed
+    if (currentButtonState != lastButtonState) {
+        lastButtonPress = millis();
+    }
+    
+    // If enough time has passed since last state change
+    if ((millis() - lastButtonPress) > debounceDelay) {
+        // If button is pressed (LOW) and wasn't pressed before
+        if (currentButtonState == LOW && lastButtonState == HIGH) {
+            logState = !logState;
+            sendLogState(logState);
+            if (logState) {
+                timeLeft = 0;
+            }
+            Serial.printf("Button pressed - Log state: %s\n", logState ? "ON" : "OFF");
         }
     }
+    
+    lastButtonState = currentButtonState;
 }
 
 
@@ -192,8 +235,7 @@ void updateConnectionStatus(bool status, int targetID) { //MARK: Update connecti
 
 bool checkConnection(int locTargetID) { //MARK: Check connection
     esp_err_t result;
-    uint8_t testArray[1] = {0}; // Test data to send
-
+    
     // structure to Action Code as a connection test
     typedef struct struct_message {
         int actionID;
@@ -202,7 +244,7 @@ bool checkConnection(int locTargetID) { //MARK: Check connection
 
     testData.actionID = 1001;
 
-    esp_now_register_send_cb(OnDataSent);    // Register send callback
+    // Don't re-register callback - it's already registered in setup()
     result = esp_now_send(broadcastAddresses[locTargetID-1], (uint8_t *) &testData, sizeof(testData));
 
     if (result == ESP_OK) {     // Check if the message was queued for sending successfully
@@ -380,35 +422,45 @@ void displayError(String errorMessage = "", int errorNr = 0){ //MARK: Display er
 
 
 void writeToSD(String dataString) { //MARK: Write to SD
+    // Check if SD card is still available
+    if (!SD.begin(CS_PIN)) {
+        Serial.println("SD Card not available for writing");
+        displayError("SD Card unavailable", 2);
+        updateStatusLED(5);
+        return;
+    }
+    
     file = SD.open(fileName, FILE_APPEND); // Open the file in append mode
-    file.print(dataString);
 
     if (!file){
-        Serial.println("Failed to write to file");
-        lcd.clear();
-        lcd.home();
-        lcd.print("FATAL ERROR: Nr.2");
-        lcd.setCursor(0, 1);
-        lcd.print("Failed to open File");
-        lcd.setCursor(0, 2);
-        lcd.print("Check SD Card and");
-        lcd.setCursor(0, 3);
-        lcd.print("Reset the Device");
-
-        while (true)
-        {
-            updateStatusLED(5);
-        }
-    }
-
-    while(!file){
         Serial.println("Failed to open file for writing");
         displayError("Failed to open file", 2);
         updateStatusLED(5);
+        
+        // Try to remount SD card
         delay(1000);
+        if (SD.begin(CS_PIN)) {
+            Serial.println("SD Card remounted successfully");
+            file = SD.open(fileName, FILE_APPEND);
+            if (!file) {
+                Serial.println("Still failed to open file after remount");
+                return;
+            }
+        } else {
+            Serial.println("Failed to remount SD card");
+            return;
+        }
     }
 
+    size_t bytesWritten = file.print(dataString);
     file.close();
+    
+    // Verify write was successful
+    if (bytesWritten == 0) {
+        Serial.println("Warning: No bytes written to SD card");
+    } else {
+        Serial.printf("Successfully wrote %d bytes to SD card\n", bytesWritten);
+    }
 }
 
 
@@ -510,8 +562,151 @@ void displayConnectionStatus() { //MARK: Display connection status
 }
 
 
+bool connectToWiFi() {
+    Serial.println("WiFi Connection:\t\t\tAttempting...");
+    lcd.setCursor(0, 0);
+    lcd.print("Connecting to WiFi...");
+    
+    // Ensure WiFi is disconnected first
+    WiFi.disconnect(true);
+    delay(100);
+    
+    WiFi.mode(WIFI_AP_STA); // Set to both AP and STA mode for ESP-NOW compatibility
+    WiFi.begin(ssid, password);
+    
+    int attempts = 0;
+    const int maxAttempts = 20; // 10 seconds timeout
+    
+    while (WiFi.status() != WL_CONNECTED && attempts < maxAttempts) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+        
+        // Show progress on LCD
+        if (attempts % 4 == 0) {
+            lcd.setCursor(19, 0);
+            lcd.print(attempts / 4);
+        }
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println();
+        Serial.print("WiFi Connection:\t\t\tSuccess (");
+        Serial.print(WiFi.localIP());
+        Serial.println(")");
+        lcd.setCursor(0, 0);
+        lcd.print("WiFi Connected      ");
+        return true;
+    } else {
+        Serial.println();
+        Serial.printf("WiFi Connection:\t\t\tFailed (Status: %d)\n", WiFi.status());
+        lcd.setCursor(0, 0);
+        lcd.print("WiFi Failed         ");
+        return false;
+    }
+}
+
+
+bool syncTimeWithNTP() {
+    Serial.println("NTP Time Sync:\t\t\t\tAttempting...");
+    lcd.setCursor(0, 1);
+    lcd.print("Syncing time...");
+    
+    // Configure time with NTP server
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    
+    // Wait for time to be set
+    struct tm timeinfo;
+    int attempts = 0;
+    const int maxAttempts = 10; // 5 seconds timeout
+    
+    while (!getLocalTime(&timeinfo) && attempts < maxAttempts) {
+        delay(500);
+        attempts++;
+        
+        // Show progress
+        if (attempts % 2 == 0) {
+            lcd.setCursor(18, 1);
+            lcd.print(attempts / 2);
+        }
+    }
+    
+    if (getLocalTime(&timeinfo)) {
+        // Validate the received time (should be reasonable)
+        if (timeinfo.tm_year > (2020 - 1900) && timeinfo.tm_year < (2050 - 1900)) {
+            // Update RTC with NTP time
+            DateTime ntpTime(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                            timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+            rtc.adjust(ntpTime);
+            
+            Serial.println("NTP Time Sync:\t\t\t\tSuccess");
+            Serial.printf("Time updated to: %04d-%02d-%02d %02d:%02d:%02d\n",
+                         timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
+                         timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+            
+            lcd.setCursor(0, 1);
+            lcd.print("Time synced         ");
+            return true;
+        } else {
+            Serial.println("NTP Time Sync:\t\t\t\tFailed (Invalid time received)");
+            lcd.setCursor(0, 1);
+            lcd.print("Time invalid        ");
+            return false;
+        }
+    } else {
+        Serial.println("NTP Time Sync:\t\t\t\tFailed (Timeout)");
+        lcd.setCursor(0, 1);
+        lcd.print("Time sync failed    ");
+        return false;
+    }
+}
+
+
+void updateSystemTimeFromRTC() {
+    Serial.println("System Time Update:\t\t\tAttempting...");
+    
+    DateTime now = rtc.now();
+    
+    // Validate RTC time before using it
+    if (now.year() < 2020 || now.year() > 2050) {
+        Serial.println("System Time Update:\t\t\tFailed (Invalid RTC time)");
+        Serial.printf("RTC shows invalid year: %d\n", now.year());
+        return;
+    }
+    
+    struct tm timeinfo;
+    timeinfo.tm_year = now.year() - 1900;  // tm_year is years since 1900
+    timeinfo.tm_mon = now.month() - 1;     // tm_mon is 0-11
+    timeinfo.tm_mday = now.day();
+    timeinfo.tm_hour = now.hour();
+    timeinfo.tm_min = now.minute();
+    timeinfo.tm_sec = now.second();
+    timeinfo.tm_isdst = -1; // Let the system determine DST
+    
+    time_t rtcTime = mktime(&timeinfo);
+    if (rtcTime == -1) {
+        Serial.println("System Time Update:\t\t\tFailed (Invalid time structure)");
+        return;
+    }
+    
+    struct timeval tv = { .tv_sec = rtcTime, .tv_usec = 0 };
+    if (settimeofday(&tv, NULL) == 0) {
+        Serial.println("System Time Update:\t\t\tSuccess");
+        Serial.printf("System time set to: %04d-%02d-%02d %02d:%02d:%02d\n",
+                     now.year(), now.month(), now.day(),
+                     now.hour(), now.minute(), now.second());
+    } else {
+        Serial.println("System Time Update:\t\t\tFailed (settimeofday error)");
+    }
+}
+
+
 void setup() {  //MARK: Setup
     Serial.begin(115200);
+
+    // Initialize watchdog timer (30 seconds timeout)
+    esp_task_wdt_init(30, true);
+    esp_task_wdt_add(NULL);
 
     Serial.println("\n\n\nSELF CHECK:\n");
 
@@ -547,6 +742,7 @@ void setup() {  //MARK: Setup
     //------------------ LCD - INIT - END ------------------
 
     //------------------ ESP-NNOW -INIT - BEGIN ------------------
+    // Set WiFi mode for ESP-NOW (will be temporarily changed for WiFi connection later)
     WiFi.mode(WIFI_STA);
 
     while (esp_now_init() != ESP_OK) {
@@ -594,16 +790,19 @@ void setup() {  //MARK: Setup
 
     strncpy(fileName, "/data_master.csv", sizeof(fileName));
     File file = SD.open(fileName, FILE_APPEND);
-    
-    while(!file){
+
+    if (!file) {
         Serial.println("Writing to file:\t\t\tFailed");
         updateStatusLED(5);
         displayError("Failed to open file", 2);
+    } else {
+        // Add header if file is empty
+        if (file.size() == 0) {
+            file.println("timestamp,target_no,sensor_no,temperature");
+        }
+        Serial.println("Writing to file:\t\t\tSuccess");
+        file.close();
     }
-    Serial.println("Writing to file:\t\t\tSuccess");
-
-    
-    file.close();
 
     //------------------ SD CARD - INIT - END ------------------
 
@@ -617,9 +816,30 @@ void setup() {  //MARK: Setup
       Serial.print(get_timestamp());
       Serial.println(")"); 
   }
-    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); //uncomment to set the RTC to the compile time
     //------------------ RTC - INIT - END ------------------
-    //lcd.clear();
+
+    //------------------ WIFI & NTP TIME SYNC - BEGIN ------------------
+    // Attempt WiFi connection and NTP time sync
+    if (connectToWiFi()) {
+        if (syncTimeWithNTP()) {
+            Serial.println("WiFi and NTP setup completed successfully");
+        } else {
+            Serial.println("WiFi connected but NTP sync failed");
+        }
+        // Disconnect WiFi to free resources for ESP-NOW
+        WiFi.disconnect();
+        delay(100);
+    } else {
+        Serial.println("WiFi connection failed, continuing without NTP sync");
+    }
+    
+    // Reset WiFi mode for ESP-NOW compatibility
+    WiFi.mode(WIFI_STA);
+    delay(100);
+    
+    // Update system time from RTC regardless of WiFi/NTP success
+    updateSystemTimeFromRTC();
+    //------------------ WIFI & NTP TIME SYNC - END ------------------
 
     lcd.clear();
     lcd.setCursor(4, 0);            // set cursor to first column, first row
@@ -632,6 +852,8 @@ void setup() {  //MARK: Setup
 
 
 void loop() {
+    // Feed the watchdog timer
+    esp_task_wdt_reset();
 
     static unsigned long previousTempUpdate = tempUpdateIntervall;
     unsigned long currentTempUpdate = millis();
