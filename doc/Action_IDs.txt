@@ -1,0 +1,204 @@
+# Communication Protocol Reference
+
+## 📡 **ESP-NOW Action ID System**
+
+The Thermal GCT system uses ESP-NOW protocol for communication between master and servant nodes. All communication is coordinated through Action ID codes that specify the type of operation requested.
+
+## 🔢 **Action ID Reference**
+
+### **Connection & System Management (1000-1999)**
+
+#### **1001 - Connection Test**
+- **Direction**: Master → Servant
+- **Purpose**: Verify communication link and servant availability
+- **Response**: Servant echoes back Action ID 1001 with value 1.0
+- **Timeout**: 800ms
+- **Usage**: Periodic connectivity checking every 3 seconds per servant
+- **Example**:
+  ```
+  Master sends: ActionID=1001
+  Servant responds: ActionID=1001, Value=1.0
+  ```
+
+#### **1002 - Enable Logging**
+- **Direction**: Master → Servant  
+- **Purpose**: Instruct servant to start local SD card logging
+- **Response**: None required
+- **Usage**: Sent when master activates logging mode
+- **Servant Action**: Sets `loggingStatus = true`
+
+#### **1003 - Disable Logging**
+- **Direction**: Master → Servant
+- **Purpose**: Instruct servant to stop local SD card logging  
+- **Response**: None required
+- **Usage**: Sent when master deactivates logging mode
+- **Servant Action**: Sets `loggingStatus = false`
+
+### **Data Collection (2000-2999)**
+
+#### **2001 - Temperature Data Response**
+- **Direction**: Servant → Master
+- **Purpose**: Transmit complete temperature sensor array data
+- **Trigger**: Response to Action ID 3001 request
+- **Data Structure**:
+  ```cpp
+  typedef struct temp {
+    int actionID;      // Always 2001
+    float sens1;       // Sensor 1 temperature (°C)
+    float sens2;       // Sensor 2 temperature (°C)
+    float sens3;       // Sensor 3 temperature (°C)
+    float sens4;       // Sensor 4 temperature (°C)
+    float sens5;       // Sensor 5 temperature (°C)
+    float sens6;       // Sensor 6 temperature (°C)
+    float sens7;       // Sensor 7 temperature (°C)
+    float sens8;       // Sensor 8 temperature (°C)
+    float sens9;       // Sensor 9 temperature (°C)
+  } temp;
+  ```
+- **Invalid Readings**: -999.0 indicates sensor error or disconnection
+
+### **Data Requests (3000-3999)**
+
+#### **3001 - Request Temperature Data**
+- **Direction**: Master → Servant
+- **Purpose**: Request complete temperature sensor array from servant
+- **Response**: Action ID 2001 with temperature data
+- **Timeout**: 2000ms (configurable via `sendTimeout`)
+- **Usage**: Primary data collection mechanism during logging
+- **Sequence**:
+  1. Master sends ActionID=3001 to servant
+  2. Servant reads all 9 temperature sensors
+  3. Servant responds with ActionID=2001 + temperature array
+  4. Master logs data to SD card with timestamp
+
+## 🔄 **Communication Flow**
+
+### **System Startup Sequence:**
+```
+1. Master: WiFi connection & NTP sync
+2. Master: Initialize ESP-NOW on channel 1
+3. Servants: Initialize ESP-NOW, register master MAC
+4. Master: Connection test (ActionID=1001) to all servants
+5. Servants: Respond to connection tests
+6. Master: Display connection status on LCD
+```
+
+### **Logging Activation Sequence:**
+```
+1. User: Press button on master
+2. Master: Send ActionID=1002 to all connected servants
+3. Servants: Enable local logging (loggingStatus=true)
+4. Master: Begin periodic data collection loop
+```
+
+### **Data Collection Loop:**
+```
+Every 10 seconds (configurable):
+1. Master: Send ActionID=3001 to Servant 1
+2. Servant 1: Respond with ActionID=2001 + temperature data
+3. Master: Log Servant 1 data to SD card
+4. Master: Send ActionID=3001 to Servant 2
+5. Servant 2: Respond with ActionID=2001 + temperature data
+6. Master: Log Servant 2 data to SD card
+7. ... (repeat for all connected servants)
+8. Master: Update LCD display with countdown
+```
+
+### **Error Handling:**
+```
+If servant timeout occurs:
+1. Master: Log "NAN" values for disconnected servant
+2. Master: Continue with next servant
+3. Master: Update connection status display
+4. Master: Retry connection on next cycle
+```
+
+## 📊 **Data Logging Format**
+
+### **Master SD Card (`/data_master.csv`):**
+```csv
+timestamp,gct_id,sensor_no,temperature
+2025-07-30 12:34:56,1,1,24.37
+2025-07-30 12:34:56,1,2,24.44
+2025-07-30 12:34:56,1,3,24.63
+2025-07-30 12:34:56,1,4,24.37
+2025-07-30 12:34:56,1,5,24.44
+2025-07-30 12:34:56,1,6,24.50
+2025-07-30 12:34:56,1,7,24.56
+2025-07-30 12:34:56,1,8,24.50
+2025-07-30 12:34:56,1,9,24.69
+2025-07-30 12:34:56,2,1,24.12
+...
+2025-07-30 12:34:56,3,123456789,NAN
+2025-07-30 12:34:56,4,123456789,NAN
+```
+
+### **Servant SD Card (`/data_GCT[ID].csv`):**
+```csv
+timestamp,gct_id,sensor_no,temperature
+2025-07-30 12:34:56,1,1,24.37
+2025-07-30 12:34:56,1,2,24.44
+2025-07-30 12:34:56,1,3,24.63
+...
+```
+
+## ⚡ **Protocol Specifications**
+
+### **Network Configuration:**
+- **Protocol**: ESP-NOW (IEEE 802.11)
+- **WiFi Channel**: 1 (2412 MHz)
+- **Encryption**: None (open communication)
+- **Range**: ~200m line-of-sight
+- **Data Rate**: 1 Mbps (sufficient for temperature data)
+
+### **Timing Parameters:**
+- **Connection Test Interval**: 3000ms per servant
+- **Connection Test Timeout**: 800ms
+- **Data Request Timeout**: 2000ms (configurable)
+- **Data Collection Interval**: 10000ms (configurable)
+- **Ping Interval**: 5000ms + 2000ms tolerance
+
+### **MAC Address Configuration:**
+- **Master Address**: Defined in `config.h` as `MASTER_MAC_ADDRESS`
+- **Servant Addresses**: Configured in master's `broadcastAddresses[]` array
+- **Address Format**: 6-byte MAC address (e.g., `{0x48, 0xE7, 0x29, 0x8C, 0x6B, 0x5C}`)
+
+## 🛠️ **Debug & Monitoring**
+
+### **Serial Debug Messages:**
+```
+Connection Status: S1=OK S2=OK S3=X S4=X (Total: 2)
+Successfully received data from servant 1
+Successfully received data from servant 2
+Servant 3 not connected - logging NAN
+Servant 4 not connected - logging NAN
+=== LOGGING ACTIVATED ===
+Button pressed - Log state: ON, numConnections: 2
+```
+
+### **Status Indicators:**
+- **S1=OK**: Servant 1 connected and responding
+- **S2=X**: Servant 2 disconnected or not responding
+- **Total: N**: Number of actively connected servants
+- **Timeout**: Communication timeout occurred
+- **NAN**: No data available (disconnected servant)
+
+## 🔧 **Configuration Parameters**
+
+### **Timeouts (`config.h`):**
+```cpp
+#define SEND_TIMEOUT_MS 2000        // Data request timeout
+#define PING_INTERVAL_MS 5000       // Connection check interval
+#define LOG_INTERVAL_MS 10000       // Data collection interval
+```
+
+### **Communication Settings:**
+```cpp
+#define WIFI_CHANNEL 1              // ESP-NOW channel
+#define MAX_SERVANTS 4              // Maximum servant count
+#define SENSORS_PER_SERVANT 9       // DS18B20 sensors per servant
+```
+
+---
+
+*This protocol enables reliable, synchronized temperature data collection across distributed Ground Control Target units for thermal-infrared drone calibration applications.*
